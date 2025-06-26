@@ -1,0 +1,33 @@
+server:
+  port: 8088
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: ByteVault
+  
+  # 数据库配置
+  datasource:
+    url: jdbc:mysql://localhost:3306/bytevault?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf-8&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: root
+
+# MyBatis-Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.bytevault.app.model
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+      table-prefix: bv_
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.bytevault: DEBUG
+    com.baomidou.mybatisplus: DEBUG 
