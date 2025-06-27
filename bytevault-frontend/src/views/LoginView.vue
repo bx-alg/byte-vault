@@ -48,6 +48,10 @@
             登录
           </el-button>
         </el-form-item>
+        
+        <div class="register-link">
+          没有账号？<router-link to="/register">立即注册</router-link>
+        </div>
       </el-form>
     </div>
   </div>
@@ -121,6 +125,9 @@ onMounted(() => {
 })
 </script>
 
+
+
+
 <style scoped>
 .login-container {
   display: flex;
@@ -158,5 +165,20 @@ onMounted(() => {
 
 .login-form {
   margin-top: 20px;
+}
+
+.register-link {
+  text-align: center;
+  margin-top: 15px;
+  font-size: 14px;
+}
+
+.register-link a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.register-link a:hover {
+  text-decoration: underline;
 }
 </style> 

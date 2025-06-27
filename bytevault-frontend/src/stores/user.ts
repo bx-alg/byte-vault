@@ -27,16 +27,16 @@ export const useUserStore = defineStore('user', () => {
     try {
       loading.value = true
       const res = await login(username, password)
-      token.value = res.data.token
+      token.value = res.token
       localStorage.setItem('token', token.value)
-      await fetchUserInfo()
+      userInfo.value = res.user
       
       // 登录成功后跳转
       const redirectPath = router.currentRoute.value.query.redirect as string || '/'
       router.push(redirectPath)
       
       return true
-    } catch (error) {
+    } catch (error: any) {
       console.error('登录失败:', error)
       return false
     } finally {
@@ -50,9 +50,13 @@ export const useUserStore = defineStore('user', () => {
     try {
       loading.value = true
       const res = await getUserInfo()
-      userInfo.value = res.data
+      userInfo.value = res
     } catch (error) {
       console.error('获取用户信息失败:', error)
+      // 如果获取用户信息失败，可能是令牌已过期，清除本地状态
+      token.value = ''
+      userInfo.value = null
+      localStorage.removeItem('token')
     } finally {
       loading.value = false
     }
@@ -74,6 +78,14 @@ export const useUserStore = defineStore('user', () => {
     }
   }
   
+  // 检查用户会话状态
+  async function checkSession() {
+    if (token.value && !userInfo.value) {
+      await fetchUserInfo()
+    }
+    return !!userInfo.value
+  }
+  
   // 初始化函数 - 如果有token则自动获取用户信息
   function init() {
     if (token.value) {
@@ -90,6 +102,7 @@ export const useUserStore = defineStore('user', () => {
     loginAction,
     logoutAction,
     fetchUserInfo,
+    checkSession,
     init
   }
 }) 

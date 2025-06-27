@@ -1,35 +1,81 @@
 package com.bytevault.app.service;
 
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.bytevault.app.mapper.UserMapper;
 import com.bytevault.app.model.User;
-import org.springframework.stereotype.Service;
 import java.util.List;
 
-@Service
-public class UserService extends ServiceImpl<UserMapper, User> {
+/**
+ * 用户服务接口
+ */
+public interface UserService {
     
-    public List<User> getAllUsers() {
-        return this.list();
-    }
+    /**
+     * 获取所有用户
+     * 
+     * @return 用户列表
+     */
+    List<User> getAllUsers();
     
-    public User getUserByUsername(String username) {
-        return this.lambdaQuery()
-                .eq(User::getUsername, username)
-                .one();
-    }
+    /**
+     * 根据用户名获取用户
+     * 
+     * @param username 用户名
+     * @return 用户对象，如果不存在则返回null
+     */
+    User getUserByUsername(String username);
     
-    public void addUser(User user) {
-        this.save(user);
-    }
+    /**
+     * 根据ID获取用户
+     * 
+     * @param id 用户ID
+     * @return 用户对象，如果不存在则返回null
+     */
+    User getUserById(Long id);
     
-    // 初始化一些测试数据
-    public void initSampleData() {
-        if (this.count() == 0) {
-            // 使用BCrypt加密的密码，对应"admin"
-            this.save(new User("admin", "$2a$10$CehLbipOZVv0VqQtxx3L2ehR5OXZtEvQWPL1DaU4TXsGfq66yINjW"));
-            // 使用BCrypt加密的密码，对应"password"
-            this.save(new User("user1", "$2a$10$GRLdNijSQMUvl/au9ofL.eDwmoohzzS7.rmNSJZ.0FxO/BTk76klW"));
-        }
-    }
+    /**
+     * 添加新用户
+     * 
+     * @param user 用户对象
+     * @return 添加后的用户（包含ID）
+     */
+    User addUser(User user);
+    
+    /**
+     * 更新用户信息
+     * 
+     * @param user 需要更新的用户对象
+     * @return 更新后的用户
+     */
+    User updateUser(User user);
+    
+    /**
+     * 删除用户
+     * 
+     * @param id 用户ID
+     * @return 是否删除成功
+     */
+    boolean deleteUser(Long id);
+    
+    /**
+     * 检查用户名是否已存在
+     * 
+     * @param username 用户名
+     * @return 是否存在
+     */
+    boolean isUsernameExists(String username);
+    
+    /**
+     * 获取包含角色信息的用户
+     * 
+     * @param id 用户ID
+     * @return 包含角色信息的用户对象
+     */
+    User getUserWithRoles(Long id);
+    
+    /**
+     * 检查用户ID是否存在
+     * 
+     * @param id 用户ID
+     * @return 是否存在
+     */
+    boolean existsById(Long id);
 } 

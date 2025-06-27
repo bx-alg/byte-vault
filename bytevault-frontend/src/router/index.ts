@@ -2,12 +2,27 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
+// 环境变量类型声明
+declare global {
+  interface ImportMeta {
+    env: {
+      BASE_URL: string
+    }
+  }
+}
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/LoginView.vue'),
-    meta: { requiresAuth: false }
+    meta: { guest: true }
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { guest: true }
   },
   {
     path: '/',
@@ -23,20 +38,33 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL || ''),
   routes,
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
   
-  // 检查路由是否需要认证
-  if (to.meta.requiresAuth && !userStore.isLoggedIn) {
-    // 如果需要认证但用户未登录，重定向到登录页
-    next({ name: 'Login', query: { redirect: to.fullPath } })
+  // 检查路由是否需要身份验证
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+  const isGuestOnly = to.matched.some(record => record.meta.guest)
+  
+  // 检查用户会话状态
+  const isAuthenticated = await userStore.checkSession()
+  
+  // 根据路由需求和用户状态决定路由行为
+  if (requiresAuth && !isAuthenticated) {
+    // 需要登录的页面，但用户未登录
+    next({
+      path: '/login',
+      query: { redirect: to.fullPath }
+    })
+  } else if (isGuestOnly && isAuthenticated) {
+    // 仅供游客访问的页面，但用户已登录
+    next({ path: '/' })
   } else {
-    // 不需要认证或已登录，继续导航
+    // 正常导航
     next()
   }
 })

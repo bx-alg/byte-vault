@@ -1,7 +1,7 @@
 server:
   port: 8088
-  servlet:
-    context-path: /api
+#  servlet:
+#    context-path: /api
 
 spring:
   application:
@@ -13,6 +13,20 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password: root
+    
+  # Redis配置
+  redis:
+    host: localhost
+    port: 6379
+    password: # 如果没有密码，可以留空
+    database: 0
+    timeout: 10000
+    lettuce:
+      pool:
+        max-active: 8
+        max-wait: -1ms
+        max-idle: 8
+        min-idle: 0
 
 # MyBatis-Plus配置
 mybatis-plus:
@@ -25,9 +39,19 @@ mybatis-plus:
       id-type: auto
       table-prefix: bv_
 
+# JWT配置
+jwt:
+  # 密钥（生产环境应使用强随机密钥并通过环境变量或加密配置文件提供）
+  secret: bytevault_jwt_secret_key_2024_please_change_in_production
+  # 过期时间（单位：秒）24小时 = 86400秒
+  expiration: 86400
+
 # 日志配置
 logging:
   level:
     root: INFO
     com.bytevault: DEBUG
-    com.baomidou.mybatisplus: DEBUG 
+    com.bytevault.app.auth: TRACE
+    com.baomidou.mybatisplus: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG 

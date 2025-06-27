@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 
 // 创建axios实例
 const service = axios.create({
-  baseURL: '', // 使用vite的proxy配置
+  baseURL: '', // 不设置baseURL，使用相对路径
   timeout: 15000
 })
 
@@ -30,35 +30,16 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   (response: AxiosResponse) => {
-    const res = response.data
-    
-    // 根据API返回的状态码处理
-    // 假设API返回格式: { code: number, message: string, data: any }
-    if (res.code !== 200) {
-      ElMessage({
-        message: res.message || '操作失败',
-        type: 'error',
-        duration: 5 * 1000
-      })
-      
-      // 401: 未授权 (token失效)
-      if (res.code === 401) {
-        // 询问用户是否重新登录
-        ElMessage.confirm('您的登录已过期，请重新登录', '提示', {
-          confirmButtonText: '重新登录',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }).then(() => {
-          // 清除token并跳转到登录页
-          localStorage.removeItem('token')
-          location.reload()
-        })
-      }
-      
-      return Promise.reject(new Error(res.message || '操作失败'))
-    } else {
-      return res
+    // 检查是否有新的token在响应头中（自动续期）
+    const newToken = response.headers['authorization']
+    if (newToken && newToken.startsWith('Bearer ')) {
+      const token = newToken.substring(7)
+      localStorage.setItem('token', token)
+      console.log('令牌已自动刷新')
     }
+    
+    // 直接返回数据
+    return response.data
   },
   (error: AxiosError) => {
     console.error('响应错误:', error)
