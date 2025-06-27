@@ -3,11 +3,13 @@ CREATE DATABASE IF NOT EXISTS bytevault DEFAULT CHARACTER SET utf8mb4 COLLATE ut
 
 USE bytevault;
 
+
 -- 创建用户表
 CREATE TABLE `user` (
     `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
     `username` VARCHAR(64) NOT NULL UNIQUE,
     `password` VARCHAR(255) NOT NULL,
+    `avatar_url` VARCHAR(255) NULL COMMENT '头像',
     `status` TINYINT DEFAULT 1 COMMENT '1正常，0禁用',
     `deleted` TINYINT DEFAULT 0 COMMENT '是否删除',
     `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,

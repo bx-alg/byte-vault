@@ -58,4 +58,32 @@ export function getUserBanStatus(userId: number) {
     url: `/api/admin/users/${userId}/ban-status`,
     method: 'get'
   })
+}
+
+/**
+ * 上传用户头像
+ * @param file 头像文件
+ */
+export function uploadAvatar(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  return request({
+    url: '/api/users/avatar',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+}
+
+/**
+ * 删除用户头像
+ */
+export function deleteAvatar() {
+  return request({
+    url: '/api/users/avatar',
+    method: 'delete'
+  });
 } 

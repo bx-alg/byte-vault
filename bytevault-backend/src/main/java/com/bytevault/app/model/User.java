@@ -26,6 +26,9 @@ public class User {
     private String username;
     private String password;
     
+    @TableField("avatar_url")
+    private String avatarUrl;
+    
     @Builder.Default
     private Integer status = 1;
     

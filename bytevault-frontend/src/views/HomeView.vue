@@ -10,7 +10,13 @@
             <span>{{ userStore.userInfo?.username }}</span>
             <el-dropdown @command="handleCommand">
               <span class="dropdown-link">
-                <el-avatar :size="32" icon="el-icon-user" />
+                <el-avatar 
+                  :size="32" 
+                  :src="getAvatarUrl" 
+                  @error="() => avatarLoadError = true"
+                >
+                  {{ userStore.userInfo?.username?.charAt(0).toUpperCase() }}
+                </el-avatar>
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -51,6 +57,15 @@
         </el-aside>
         
         <el-main>
+          <!-- 用户个人资料 -->
+          <el-dialog
+            v-model="showProfileDialog"
+            title="个人资料"
+            width="400px"
+          >
+            <user-profile />
+          </el-dialog>
+          
           <el-card>
             <template #header>
               <div class="card-header">
@@ -70,11 +85,26 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import UserProfile from '@/components/UserProfile.vue'
 
 const userStore = useUserStore()
+const avatarLoadError = ref(false)
+const showProfileDialog = ref(false)
+
+// 获取头像URL
+const getAvatarUrl = computed(() => {
+  const url = userStore.userInfo?.avatarUrl
+  if (!url) return null
+  
+  // 如果是相对URL，直接使用
+  if (url.startsWith('/api/')) {
+    return url
+  }
+  return url
+})
 
 // 下拉菜单命令处理
 const handleCommand = (command: string) => {
@@ -88,7 +118,7 @@ const handleCommand = (command: string) => {
       ElMessage.success('已退出登录')
     }).catch(() => {})
   } else if (command === 'profile') {
-    ElMessage.info('功能开发中...')
+    showProfileDialog.value = true
   } else if (command === 'settings') {
     ElMessage.info('功能开发中...')
   }

@@ -7,6 +7,7 @@ export interface UserInfo {
   id: number
   username: string
   status: number
+  avatarUrl?: string
   roles?: string[]
 }
 

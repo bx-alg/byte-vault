@@ -1,7 +1,6 @@
 server:
   port: 8088
-#  servlet:
-#    context-path: /api
+
 
 spring:
   application:
@@ -54,4 +53,11 @@ logging:
     com.bytevault.app.auth: TRACE
     com.baomidou.mybatisplus: DEBUG
     org.springframework.security: DEBUG
-    org.springframework.web: DEBUG 
+    org.springframework.web: DEBUG
+
+# MinIO配置
+minio:
+  endpoint: http://localhost:9000
+  accessKey: admin
+  secretKey: admin123
+  bucketName: bytevault-avatar 
