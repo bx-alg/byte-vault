@@ -1,35 +1,7 @@
 <template>
   <div class="home-container">
     <el-container>
-      <el-header>
-        <div class="header-container">
-          <div class="logo">
-            <h2>ByteVault</h2>
-          </div>
-          <div class="user-info">
-            <span>欢迎, {{ userStore.userInfo?.username }}</span>
-            <el-dropdown @command="handleCommand">
-              <span class="dropdown-link">
-                <el-avatar 
-                  :size="32" 
-                  :src="userStore.userInfo?.avatarUrl || ''"
-                  @error="avatarLoadError = true"
-                >
-                  <el-icon><UserFilled /></el-icon>
-                </el-avatar>
-                <el-icon class="el-icon--right"><arrow-down /></el-icon>
-              </span>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="profile">个人资料</el-dropdown-item>
-                  <el-dropdown-item command="settings">设置</el-dropdown-item>
-                  <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
-        </div>
-      </el-header>
+
       
       <el-container>
         <el-aside width="200px">
@@ -78,10 +50,9 @@ import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import UserProfile from '@/components/UserProfile.vue'
 import FileExplorer from '@/components/FileExplorer.vue'
-import { Document, Share, ArrowDown, UserFilled } from '@element-plus/icons-vue'
+import { Document, Share } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
-const avatarLoadError = ref(false)
 const showProfileDialog = ref(false)
 const loading = ref(false)
 const activeMenu = ref('my-files')

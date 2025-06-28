@@ -42,7 +42,7 @@ export function deleteFile(fileId: number) {
  */
 export function getFileDownloadUrl(fileId: number) {
   return request({
-    url: `/api/files/${fileId}/download-url`,
+    url: `/api/files/${fileId}/download`,
     method: 'get'
   })
 }
@@ -55,9 +55,9 @@ export function getFileDownloadUrl(fileId: number) {
  */
 export function updateFilePublicStatus(fileId: number, isPublic: boolean) {
   return request({
-    url: `/api/files/${fileId}/visibility`,
+    url: `/api/files/${fileId}/public`,
     method: 'put',
-    data: {
+    params: {
       isPublic
     }
   })
@@ -72,12 +72,12 @@ export function updateFilePublicStatus(fileId: number, isPublic: boolean) {
  */
 export function getUserFiles(parentId: number = 0, page: number = 1, pageSize: number = 10) {
   return request({
-    url: '/api/files/user',
+    url: '/api/files/my',
     method: 'get',
     params: {
       parentId,
       page,
-      pageSize
+      size: pageSize
     }
   })
 }

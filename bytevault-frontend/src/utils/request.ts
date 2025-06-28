@@ -45,7 +45,12 @@ service.interceptors.response.use(
     console.error('响应错误:', error)
     
     let message = '连接服务器失败'
-    if (error.response) {
+    
+    if (error.code === 'ECONNABORTED') {
+      message = '请求超时，请检查网络连接'
+    } else if (error.message && error.message.includes('Network Error')) {
+      message = '网络错误，请检查您的网络连接'
+    } else if (error.response) {
       const status = error.response.status
       
       switch (status) {

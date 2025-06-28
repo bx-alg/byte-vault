@@ -49,7 +49,7 @@ public class FileInfo {
     private String visibility = "private";
     
     @TableField("is_deleted")
-    @TableLogic
+    @TableLogic(value = "false", delval = "true")
     @Builder.Default
     private Boolean deleted = false;
     

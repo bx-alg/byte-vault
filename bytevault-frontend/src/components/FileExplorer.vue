@@ -217,7 +217,7 @@ const loadFiles = async () => {
   emit('update:loading', true)
   
   try {
-    let response
+    let response: any
     
     if (isSearching.value && searchKeyword.value) {
       // 搜索文件
@@ -229,12 +229,20 @@ const loadFiles = async () => {
       // 加载公共文件
       response = await fileApi.getPublicFiles(currentPage.value, pageSize.value)
     }
-    
-    fileList.value = response.data.files
-    total.value = response.data.total
+    console.log(response)
+    if (response) {
+      fileList.value = response.files || []
+      total.value = response.total || 0
+    } else {
+      fileList.value = []
+      total.value = 0
+      ElMessage.warning('未获取到文件数据')
+    }
   } catch (error) {
     console.error('加载文件失败:', error)
-    ElMessage.error('加载文件失败')
+    ElMessage.error('加载文件失败，请稍后重试')
+    fileList.value = []
+    total.value = 0
   } finally {
     loading.value = false
     emit('update:loading', false)
@@ -251,6 +259,7 @@ const customUpload = async (options: UploadRequestOptions) => {
     const isPublic = false // 默认上传为私有文件
     
     const response = await fileApi.uploadFile(file, currentDirectory.value.id, isPublic)
+    console.log(response)
     ElMessage.success('文件上传成功')
     loadFiles() // 重新加载文件列表
   } catch (error) {
@@ -274,12 +283,12 @@ const handleDownload = async (file: any) => {
     loading.value = true
     emit('update:loading', true)
     
-    const response = await fileApi.getFileDownloadUrl(file.id)
-    
-    if (response.data.downloadUrl) {
+    const response = await fileApi.getFileDownloadUrl(file.id) as any
+    console.log(response)
+    if (response && response.downloadUrl) {
       // 创建临时链接并点击下载
       const link = document.createElement('a')
-      link.href = response.data.downloadUrl
+      link.href = response.downloadUrl
       link.setAttribute('download', file.filename)
       document.body.appendChild(link)
       link.click()
@@ -291,7 +300,7 @@ const handleDownload = async (file: any) => {
     }
   } catch (error) {
     console.error('文件下载失败:', error)
-    ElMessage.error('文件下载失败')
+    ElMessage.error('文件下载失败，请稍后重试')
   } finally {
     loading.value = false
     emit('update:loading', false)
@@ -317,21 +326,37 @@ const navigateToParent = async () => {
     
     // 获取当前文件夹信息
     const response = await fileApi.getFileInfo(currentDirectory.value.id)
-    const parentId = response.data.file.parentId || 0
     
-    if (parentId === 0) {
-      currentDirectory.value = { id: 0, name: '根目录' }
+    if (response && response.data && response.data.file) {
+      const parentId = response.data.file.parentId || 0
+      
+      if (parentId === 0) {
+        currentDirectory.value = { id: 0, name: '根目录' }
+      } else {
+        // 获取父文件夹信息
+        const parentResponse = await fileApi.getFileInfo(parentId)
+        if (parentResponse && parentResponse.data && parentResponse.data.file) {
+          currentDirectory.value = { id: parentId, name: parentResponse.data.file.filename }
+        } else {
+          currentDirectory.value = { id: 0, name: '根目录' }
+          ElMessage.warning('获取父文件夹信息失败，已返回根目录')
+        }
+      }
+      
+      currentPage.value = 1
+      loadFiles()
     } else {
-      // 获取父文件夹信息
-      const parentResponse = await fileApi.getFileInfo(parentId)
-      currentDirectory.value = { id: parentId, name: parentResponse.data.file.filename }
+      currentDirectory.value = { id: 0, name: '根目录' }
+      currentPage.value = 1
+      loadFiles()
+      ElMessage.warning('获取文件夹信息失败，已返回根目录')
     }
-    
-    currentPage.value = 1
-    loadFiles()
   } catch (error) {
     console.error('导航失败:', error)
-    ElMessage.error('导航失败')
+    ElMessage.error('导航失败，已返回根目录')
+    currentDirectory.value = { id: 0, name: '根目录' }
+    currentPage.value = 1
+    loadFiles()
   } finally {
     loading.value = false
     emit('update:loading', false)
@@ -348,6 +373,9 @@ const createNewFolder = async () => {
         if (!value) {
           return '文件夹名称不能为空'
         }
+        if (value.length > 50) {
+          return '文件夹名称不能超过50个字符'
+        }
         return true
       }
     })
@@ -356,9 +384,14 @@ const createNewFolder = async () => {
       loading.value = true
       emit('update:loading', true)
       
-      await fileApi.createFolder(folderName, currentDirectory.value.id)
-      ElMessage.success('文件夹创建成功')
-      loadFiles()
+      const response = await fileApi.createFolder(folderName, currentDirectory.value.id)
+      
+      if (response && response.data) {
+        ElMessage.success('文件夹创建成功')
+        loadFiles()
+      } else {
+        ElMessage.error('文件夹创建失败')
+      }
     }
   } catch (error) {
     if (error !== 'cancel') {
@@ -411,7 +444,7 @@ const handleTogglePublic = async (file: any) => {
     loadFiles() // 重新加载文件列表
   } catch (error) {
     console.error('更新文件状态失败:', error)
-    ElMessage.error('更新文件状态失败')
+    ElMessage.error('更新文件状态失败，请稍后重试')
   } finally {
     loading.value = false
     emit('update:loading', false)

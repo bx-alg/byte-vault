@@ -53,9 +53,8 @@ public class FileServiceImpl implements FileService {
                 originalFilename = "unknown_file";
             }
             
-            // 构建对象名: 用户ID/uuid/文件名
-            String uuid = UUID.randomUUID().toString();
-            String objectName = userId + "/" + uuid + "/" + originalFilename;
+            // 构建对象名: 用户ID/文件名
+            String objectName = userId + "/" + originalFilename;
             
             // 上传文件到MinIO
             InputStream inputStream = file.getInputStream();
@@ -117,13 +116,11 @@ public class FileServiceImpl implements FileService {
                                 .build());
             }
             
-            // 从数据库中删除文件记录（逻辑删除）
-            fileInfo.setDeleted(true);
-            fileInfo.setUpdateTime(LocalDateTime.now());
-            fileMapper.updateById(fileInfo);
+            // 使用MyBatis-Plus的deleteById直接进行逻辑删除
+            int deleteResult = fileMapper.deleteById(fileId);
             
-            log.info("文件删除成功: {}, 用户ID: {}", fileId, userId);
-            return true;
+            log.info("文件删除操作: {}, 用户ID: {}, 删除结果: {}", fileId, userId, deleteResult);
+            return deleteResult > 0;
         } catch (Exception e) {
             log.error("文件删除失败: {}", e.getMessage(), e);
             return false;
