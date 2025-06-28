@@ -8,7 +8,7 @@ export interface UserInfo {
   username: string
   status: number
   avatarUrl?: string
-  roles?: string[]
+  roles?: any[]
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -16,13 +16,29 @@ export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
   const userInfo = ref<UserInfo | null>(null)
   const loading = ref<boolean>(false)
-  
+
   // 计算属性
   const isLoggedIn = computed(() => !!token.value)
   const hasRole = computed(() => (role: string) => {
-    return userInfo.value?.roles?.includes(role) || false
+    if (!userInfo.value?.roles || userInfo.value.roles.length === 0) {
+      return false
+    }
+    
+    return userInfo.value.roles.some(r => {
+      // 处理字符串角色
+      if (typeof r === 'string') {
+        return r === role
+      }
+      
+      // 处理对象角色 (role.name)
+      if (r && typeof r === 'object' && r.name) {
+        return r.name === role
+      }
+      
+      return false
+    })
   })
-  
+
   // 动作
   async function loginAction(username: string, password: string) {
     try {
@@ -31,11 +47,11 @@ export const useUserStore = defineStore('user', () => {
       token.value = res.token
       localStorage.setItem('token', token.value)
       userInfo.value = res.user
-      
+
       // 登录成功后跳转
       const redirectPath = router.currentRoute.value.query.redirect as string || '/'
       router.push(redirectPath)
-      
+
       return true
     } catch (error: any) {
       console.error('登录失败:', error)
@@ -44,10 +60,10 @@ export const useUserStore = defineStore('user', () => {
       loading.value = false
     }
   }
-  
+
   async function fetchUserInfo() {
     if (!token.value) return
-    
+
     try {
       loading.value = true
       const res = await getUserInfo()
@@ -62,7 +78,7 @@ export const useUserStore = defineStore('user', () => {
       loading.value = false
     }
   }
-  
+
   async function logoutAction() {
     try {
       if (token.value) {
@@ -78,7 +94,7 @@ export const useUserStore = defineStore('user', () => {
       router.push('/login')
     }
   }
-  
+
   // 检查用户会话状态
   async function checkSession() {
     if (token.value && !userInfo.value) {
@@ -86,14 +102,14 @@ export const useUserStore = defineStore('user', () => {
     }
     return !!userInfo.value
   }
-  
+
   // 初始化函数 - 如果有token则自动获取用户信息
   function init() {
     if (token.value) {
       fetchUserInfo()
     }
   }
-  
+
   return {
     token,
     userInfo,

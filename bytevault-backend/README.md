@@ -89,3 +89,10 @@ mvn spring-boot:run
 
 - 用户名: admin
 - 密码: admin 
+
+## 启动 MinIO 服务
+
+```bash
+cd bytevault-backend
+docker-compose -f docker/minio.yml up -d
+```

@@ -15,36 +15,46 @@ import java.util.List;
 
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
-    
+
     private final BCryptPasswordEncoder passwordEncoder;
     private RoleService roleService;
-    
+
     public UserServiceImpl(BCryptPasswordEncoder passwordEncoder) {
         this.passwordEncoder = passwordEncoder;
     }
-    
+
     @Autowired
     public void setRoleService(@Lazy RoleService roleService) {
         this.roleService = roleService;
+        
     }
-    
+
     @Override
     public List<User> getAllUsers() {
-        return this.list();
+        // 获取所有用户
+        List<User> users = this.list();
+
+        // 为每个用户加载角色信息
+        for (User user : users) {
+            List<Role> roles = roleService.getRolesByUserId(user.getId());
+            user.setRoles(roles);
+        }
+
+        return users;
     }
-    
+
     @Override
     public User getUserByUsername(String username) {
         return this.lambdaQuery()
                 .eq(User::getUsername, username)
                 .one();
     }
-    
+
     @Override
     public User getUserById(Long id) {
         return this.getById(id);
     }
-    
+
     @Override
     @Transactional
     public User addUser(User user) {
@@ -52,45 +62,45 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         LocalDateTime now = LocalDateTime.now();
         user.setCreateTime(now);
         user.setUpdateTime(now);
-        
+
         // 加密密码
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        
+
         // 保存用户
         this.save(user);
         return user;
     }
-    
+
     @Override
     @Transactional
     public User updateUser(User user) {
         // 设置更新时间
         user.setUpdateTime(LocalDateTime.now());
-        
+
         // 如果密码被修改，需要重新加密
         User existingUser = this.getById(user.getId());
         if (existingUser != null && !existingUser.getPassword().equals(user.getPassword())) {
             user.setPassword(passwordEncoder.encode(user.getPassword()));
         }
-        
+
         // 更新用户
         this.updateById(user);
         return user;
     }
-    
+
     @Override
     @Transactional
     public boolean deleteUser(Long id) {
         return this.removeById(id);
     }
-    
+
     @Override
     public boolean isUsernameExists(String username) {
         return this.lambdaQuery()
                 .eq(User::getUsername, username)
                 .count() > 0;
     }
-    
+
     @Override
     public User getUserWithRoles(Long id) {
         User user = this.getById(id);
@@ -100,9 +110,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         return user;
     }
-    
+
     @Override
     public boolean existsById(Long id) {
         return this.getById(id) != null;
     }
-} 
+}

@@ -7,13 +7,21 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.bytevault.app.auth.service.AuthService;
-import com.bytevault.app.file.service.FileService;
 import com.bytevault.app.model.AvatarUploadResponse;
 import com.bytevault.app.model.User;
 import com.bytevault.app.service.UserService;
 
+import io.minio.*;
+import io.minio.http.Method;
+
+import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,8 +32,11 @@ import lombok.extern.slf4j.Slf4j;
 public class UserController {
 
     private final UserService userService;
-    private final FileService fileService;
     private final AuthService authService;
+    private final MinioClient minioClient;
+    
+    @Value("${minio.bucketName}")
+    private String avatarBucket;
 
     @GetMapping
     public ResponseEntity<List<User>> getAllUsers() {
@@ -119,15 +130,44 @@ public class UserController {
                 return ResponseEntity.badRequest().body(Map.of("message", "只支持上传图片文件"));
             }
 
-            // 上传文件到MinIO
-            String avatarUrl = fileService.uploadFile(file, "avatars");
+            // 生成唯一文件名
+            String originalFilename = file.getOriginalFilename();
+            String fileExtension = "";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                fileExtension = originalFilename.substring(originalFilename.lastIndexOf("."));
+            }
+            String objectName = "avatar_" + currentUser.getId() + "_" + UUID.randomUUID() + fileExtension;
 
-            // 更新用户头像URL
+            // 上传文件到MinIO的头像桶
+            InputStream inputStream = file.getInputStream();
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(avatarBucket)
+                            .object(objectName)
+                            .stream(inputStream, file.getSize(), -1)
+                            .contentType(contentType)
+                            .build());
+
+            // 删除旧头像（如果存在）
             if (currentUser.getAvatarUrl() != null && !currentUser.getAvatarUrl().isEmpty()) {
-                // 删除旧头像
-                fileService.deleteFile(currentUser.getAvatarUrl());
+                try {
+                    String oldObjectName = extractObjectNameFromUrl(currentUser.getAvatarUrl());
+                    if (oldObjectName != null) {
+                        minioClient.removeObject(
+                                RemoveObjectArgs.builder()
+                                        .bucket(avatarBucket)
+                                        .object(oldObjectName)
+                                        .build());
+                    }
+                } catch (Exception e) {
+                    log.warn("删除旧头像失败: {}", e.getMessage());
+                }
             }
 
+            // 生成访问URL
+            String avatarUrl = "/api/users/avatar/" + objectName;
+            
+            // 更新用户头像URL
             currentUser.setAvatarUrl(avatarUrl);
             userService.updateUser(currentUser);
 
@@ -163,10 +203,15 @@ public class UserController {
                 return ResponseEntity.ok(Map.of("message", "用户没有设置头像"));
             }
 
-            // 删除MinIO中的头像文件
-            boolean deleted = fileService.deleteFile(avatarUrl);
-            if (!deleted) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "头像删除失败"));
+            // 从URL中提取对象名
+            String objectName = extractObjectNameFromUrl(avatarUrl);
+            if (objectName != null) {
+                // 删除MinIO中的头像文件
+                minioClient.removeObject(
+                        RemoveObjectArgs.builder()
+                                .bucket(avatarBucket)
+                                .object(objectName)
+                                .build());
             }
 
             // 更新用户信息，清空头像URL
@@ -181,5 +226,53 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "头像删除失败: " + e.getMessage()));
         }
+    }
+    
+    /**
+     * 获取头像图片
+     * 
+     * @param objectName 头像对象名
+     * @return 头像图片
+     */
+    @GetMapping("/avatar/{objectName}")
+    public ResponseEntity<?> getAvatar(@PathVariable String objectName) {
+        try {
+            // 生成预签名URL
+            String presignedUrl = minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(avatarBucket)
+                            .object(objectName)
+                            .expiry(1, TimeUnit.HOURS)
+                            .build());
+            
+            // 重定向到预签名URL
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .header("Location", presignedUrl)
+                    .build();
+        } catch (Exception e) {
+            log.error("获取头像失败: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "获取头像失败: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * 从URL中提取对象名
+     * 
+     * @param url 头像URL
+     * @return 对象名
+     */
+    private String extractObjectNameFromUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return null;
+        }
+        
+        // 头像URL格式: /api/users/avatar/objectName
+        if (url.startsWith("/api/users/avatar/")) {
+            return url.substring("/api/users/avatar/".length());
+        }
+        
+        return null;
     }
 } 

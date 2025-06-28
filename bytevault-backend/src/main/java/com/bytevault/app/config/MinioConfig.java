@@ -25,6 +25,9 @@ public class MinioConfig {
 
     @Value("${minio.bucketName}")
     private String bucketName;
+    
+    @Value("${minio.userFilesBucket}")
+    private String userFilesBucket;
 
     @Bean
     public MinioClient minioClient() {
@@ -34,7 +37,7 @@ public class MinioConfig {
                     .credentials(accessKey, secretKey)
                     .build();
             
-            // 检查bucket是否存在
+            // 检查avatar bucket是否存在
             boolean bucketExists = minioClient.bucketExists(BucketExistsArgs.builder()
                     .bucket(bucketName)
                     .build());
@@ -47,6 +50,21 @@ public class MinioConfig {
                 log.info("Bucket {} 创建成功", bucketName);
             } else {
                 log.info("Bucket {} 已存在", bucketName);
+            }
+            
+            // 检查user-files bucket是否存在
+            boolean userFilesBucketExists = minioClient.bucketExists(BucketExistsArgs.builder()
+                    .bucket(userFilesBucket)
+                    .build());
+            
+            if (!userFilesBucketExists) {
+                // 如果不存在，则创建bucket
+                minioClient.makeBucket(MakeBucketArgs.builder()
+                        .bucket(userFilesBucket)
+                        .build());
+                log.info("Bucket {} 创建成功", userFilesBucket);
+            } else {
+                log.info("Bucket {} 已存在", userFilesBucket);
             }
             
             return minioClient;

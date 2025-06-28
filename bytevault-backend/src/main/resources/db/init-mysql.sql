@@ -3,6 +3,12 @@ CREATE DATABASE IF NOT EXISTS bytevault DEFAULT CHARACTER SET utf8mb4 COLLATE ut
 
 USE bytevault;
 
+drop table if exists `user`;
+drop table if exists `role`;
+drop table if exists `user_role`;
+drop table if exists `permission`;
+drop table if exists `role_permission`;
+drop table if exists `file`;
 
 -- 创建用户表
 CREATE TABLE `user` (
@@ -48,10 +54,23 @@ CREATE TABLE `role_permission` (
     PRIMARY KEY (`role_id`, `permission_id`)
 );
 
-
--- 添加管理员用户（密码：admin）
-INSERT INTO `user` (username, password) VALUES
-('admin', '$2a$10$CehLbipOZVv0VqQtxx3L2ehR5OXZtEvQWPL1DaU4TXsGfq66yINjW');
+-- 创建文件表
+CREATE TABLE `file` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `user_id` BIGINT NOT NULL COMMENT '所有者用户ID',
+    `filename` VARCHAR(255) NOT NULL COMMENT '文件名',
+    `directory_path` VARCHAR(1024) DEFAULT '/' COMMENT '目录路径',
+    `object_name` VARCHAR(1024) NOT NULL COMMENT 'Minio对象名',
+    `file_size` BIGINT NOT NULL COMMENT '文件大小(字节)',
+    `file_type` VARCHAR(128) COMMENT '文件类型/MIME类型',
+    `is_public` TINYINT DEFAULT 0 COMMENT '是否公开：0私有，1公开',
+    `deleted` TINYINT DEFAULT 0 COMMENT '是否删除',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_filename` (`filename`),
+    INDEX `idx_is_public` (`is_public`)
+);
 
 -- 添加 admin 角色
 INSERT INTO `role` (name, description) VALUES

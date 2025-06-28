@@ -7,20 +7,21 @@
             <h2>ByteVault</h2>
           </div>
           <div class="user-info">
-            <span>{{ userStore.userInfo?.username }}</span>
+            <span>欢迎, {{ userStore.userInfo?.username }}</span>
             <el-dropdown @command="handleCommand">
               <span class="dropdown-link">
                 <el-avatar 
                   :size="32" 
-                  :src="getAvatarUrl" 
-                  @error="() => avatarLoadError = true"
+                  :src="userStore.userInfo?.avatarUrl || ''"
+                  @error="avatarLoadError = true"
                 >
-                  {{ userStore.userInfo?.username?.charAt(0).toUpperCase() }}
+                  <el-icon><UserFilled /></el-icon>
                 </el-avatar>
+                <el-icon class="el-icon--right"><arrow-down /></el-icon>
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="profile">个人信息</el-dropdown-item>
+                  <el-dropdown-item command="profile">个人资料</el-dropdown-item>
                   <el-dropdown-item command="settings">设置</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -33,25 +34,17 @@
       <el-container>
         <el-aside width="200px">
           <el-menu
-            default-active="1"
+            :default-active="activeMenu"
             class="el-menu-vertical"
-            :router="true"
+            @select="handleMenuSelect"
           >
-            <el-menu-item index="1">
-              <i class="el-icon-document"></i>
+            <el-menu-item index="my-files">
+              <el-icon><Document /></el-icon>
               <span>我的文件</span>
             </el-menu-item>
-            <el-menu-item index="2">
-              <i class="el-icon-share"></i>
-              <span>共享文件</span>
-            </el-menu-item>
-            <el-menu-item index="3">
-              <i class="el-icon-star-off"></i>
-              <span>收藏夹</span>
-            </el-menu-item>
-            <el-menu-item index="4">
-              <i class="el-icon-delete"></i>
-              <span>回收站</span>
+            <el-menu-item index="public-files">
+              <el-icon><Share /></el-icon>
+              <span>公共文件</span>
             </el-menu-item>
           </el-menu>
         </el-aside>
@@ -66,18 +59,13 @@
             <user-profile />
           </el-dialog>
           
-          <el-card>
-            <template #header>
-              <div class="card-header">
-                <span>欢迎使用ByteVault文件管理系统</span>
-              </div>
-            </template>
-            <div>
-              <p>您已成功登录系统。</p>
-              <p>当前登录用户: {{ userStore.userInfo?.username }}</p>
-              <p>用户ID: {{ userStore.userInfo?.id }}</p>
-            </div>
-          </el-card>
+          <!-- 文件浏览器组件 -->
+          <file-explorer 
+            :type="activeMenu" 
+            :title="menuTitle"
+            v-model:loading="loading"
+            ref="fileExplorer"
+          />
         </el-main>
       </el-container>
     </el-container>
@@ -89,21 +77,26 @@ import { onMounted, ref, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import UserProfile from '@/components/UserProfile.vue'
+import FileExplorer from '@/components/FileExplorer.vue'
+import { Document, Share, ArrowDown, UserFilled } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const avatarLoadError = ref(false)
 const showProfileDialog = ref(false)
+const loading = ref(false)
+const activeMenu = ref('my-files')
+const fileExplorer = ref(null)
 
-// 获取头像URL
-const getAvatarUrl = computed(() => {
-  const url = userStore.userInfo?.avatarUrl
-  if (!url) return null
-  
-  // 如果是相对URL，直接使用
-  if (url.startsWith('/api/')) {
-    return url
+// 根据菜单项计算标题
+const menuTitle = computed(() => {
+  switch (activeMenu.value) {
+    case 'my-files':
+      return '我的文件'
+    case 'public-files':
+      return '公共文件'
+    default:
+      return '文件'
   }
-  return url
 })
 
 // 下拉菜单命令处理
@@ -122,6 +115,11 @@ const handleCommand = (command: string) => {
   } else if (command === 'settings') {
     ElMessage.info('功能开发中...')
   }
+}
+
+// 处理菜单选择
+const handleMenuSelect = (key: string) => {
+  activeMenu.value = key
 }
 
 // 组件挂载时获取用户信息
@@ -183,11 +181,5 @@ onMounted(() => {
 .el-main {
   background-color: #f5f7fa;
   padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 </style> 
