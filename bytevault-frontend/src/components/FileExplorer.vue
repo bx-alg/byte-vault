@@ -4,11 +4,15 @@
     <div class="file-actions">
       <div class="left-actions">
         <el-breadcrumb separator="/">
-          <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-          <el-breadcrumb-item>{{ title }}</el-breadcrumb-item>
+          <el-breadcrumb-item :to="{ path: '/' }">
+            <i class="el-icon-house"></i> 首页
+          </el-breadcrumb-item>
+          <el-breadcrumb-item>
+            <span class="wiggle">{{ title }}</span>
+          </el-breadcrumb-item>
           <template v-if="currentDirectory.id !== 0">
             <el-breadcrumb-item @click="navigateToParent" class="clickable-breadcrumb">
-              {{ currentDirectory.name }}
+              <span class="wiggle">{{ currentDirectory.name }}</span>
             </el-breadcrumb-item>
           </template>
         </el-breadcrumb>
@@ -32,7 +36,7 @@
           v-if="showCreateFolder"
           type="success"
           @click="createNewFolder"
-          class="action-button"
+          class="action-button wiggle"
         >
           <el-icon><Folder /></el-icon>
           新建文件夹
@@ -45,7 +49,7 @@
           :http-request="customUpload"
           :multiple="false"
         >
-          <el-button type="primary" class="action-button">
+          <el-button type="primary" class="action-button wiggle">
             <el-icon><Upload /></el-icon>
             上传文件
           </el-button>
@@ -57,18 +61,28 @@
     <el-card class="file-list-card">
       <template #header>
         <div class="card-header">
-          <span>{{ title }}</span>
-          <span v-if="isSearching">搜索结果: {{ searchKeyword }}</span>
+          <span class="card-title">{{ title }}</span>
+          <span v-if="isSearching" class="search-result-text">搜索结果: {{ searchKeyword }}</span>
           <span v-if="currentDirectory.id !== 0" class="directory-path">
             当前目录: {{ currentDirectory.name }}
-            <el-button size="small" @click="navigateToParent" type="text">
+            <el-button size="small" @click="navigateToParent" type="text" class="wiggle">
               返回上级
             </el-button>
           </span>
         </div>
       </template>
       
+      <div v-if="loading" class="cute-loading-container">
+        <div class="cute-loading"></div>
+        <div class="loading-text">加载中...</div>
+      </div>
+      
+      <el-empty v-else-if="fileList.length === 0" description="暂无文件" class="empty-files">
+        <img src="https://i.imgur.com/JXmxKxN.png" class="empty-image floating" alt="暂无文件" />
+      </el-empty>
+      
       <el-table
+        v-else
         v-loading="loading"
         :data="fileList"
         style="width: 100%"
@@ -76,8 +90,8 @@
         <el-table-column label="文件名" prop="filename" min-width="200">
           <template #default="scope">
             <div class="file-name-cell">
-              <el-icon v-if="scope.row.isDir"><Folder /></el-icon>
-              <el-icon v-else><Document /></el-icon>
+              <el-icon v-if="scope.row.isDir" class="file-icon folder-icon"><Folder /></el-icon>
+              <el-icon v-else class="file-icon"><Document /></el-icon>
               <span 
                 :class="{ 'folder-name': scope.row.isDir }"
                 @click="scope.row.isDir ? navigateToFolder(scope.row) : handleDownload(scope.row)"
@@ -104,7 +118,7 @@
         
         <el-table-column label="状态" prop="visibility" width="100">
           <template #default="scope">
-            <el-tag :type="scope.row.visibility === 'public' ? 'success' : 'info'">
+            <el-tag :type="scope.row.visibility === 'public' ? 'success' : 'info'" class="status-tag">
               {{ scope.row.visibility === 'public' ? '公开' : '私有' }}
             </el-tag>
           </template>
@@ -116,6 +130,7 @@
               size="small" 
               @click="handleDownload(scope.row)"
               v-if="!scope.row.isDir"
+              class="action-btn wiggle"
             >
               下载
             </el-button>
@@ -124,6 +139,7 @@
               size="small" 
               type="danger" 
               @click="handleDelete(scope.row)"
+              class="action-btn wiggle"
             >
               删除
             </el-button>
@@ -132,6 +148,7 @@
               size="small"
               type="info"
               @click="handleTogglePublic(scope.row)"
+              class="action-btn wiggle"
             >
               {{ scope.row.visibility === 'public' ? '设为私有' : '设为公开' }}
             </el-button>
@@ -530,12 +547,19 @@ defineExpose({
 
 .file-list-card {
   margin-bottom: 20px;
+  transition: all 0.3s ease;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.card-title {
+  font-weight: bold;
+  font-size: 1.2em;
+  color: var(--primary-color);
 }
 
 .file-name-cell {
@@ -545,29 +569,83 @@ defineExpose({
 
 .file-name-cell .el-icon {
   margin-right: 8px;
+  font-size: 1.2em;
 }
 
 .folder-name {
-  color: #409EFF;
+  color: var(--secondary-color);
   cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s ease;
 }
 
 .folder-name:hover {
   text-decoration: underline;
+  transform: translateX(3px);
 }
 
 .directory-path {
   font-size: 0.9em;
-  color: #606266;
+  color: var(--light-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .clickable-breadcrumb {
   cursor: pointer;
+  color: var(--secondary-color);
+  transition: all 0.2s ease;
+}
+
+.clickable-breadcrumb:hover {
+  color: var(--primary-color);
+  text-decoration: underline;
 }
 
 .pagination-container {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.status-tag {
+  font-weight: bold;
+}
+
+.empty-files {
+  padding: 40px 0;
+}
+
+.empty-image {
+  width: 200px;
+  margin-bottom: 20px;
+}
+
+.cute-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 50px 0;
+}
+
+.loading-text {
+  margin-top: 20px;
+  color: var(--primary-color);
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.search-result-text {
+  background-color: rgba(255, 105, 180, 0.1);
+  padding: 4px 12px;
+  border-radius: 20px;
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+.action-btn {
+  margin: 0 3px;
 }
 </style> 

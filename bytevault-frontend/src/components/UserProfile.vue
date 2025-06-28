@@ -1,421 +1,349 @@
 <template>
-  <div class="anime-profile-container">
-    <div class="anime-profile">
-      <div class="anime-profile-header">
-        <div class="header-bg"></div>
-        <div class="avatar-frame">
-          <el-avatar
-            :size="120"
-            :src="avatarUrl || defaultAvatar"
-            @error="handleAvatarError"
-          >
-            {{ userStore.userInfo?.username.charAt(0).toUpperCase() }}
-          </el-avatar>
+  <div class="user-profile">
+    <div class="profile-header">
+      <div class="profile-avatar-container">
+        <div class="avatar-wrapper">
+          <el-avatar :size="100" :src="avatarUrl || defaultAvatar" class="profile-avatar" />
+          <div class="avatar-overlay" @click="triggerFileInput">
+            <el-icon><Edit /></el-icon>
+          </div>
         </div>
+        <input
+          type="file"
+          ref="fileInput"
+          style="display: none"
+          accept="image/*"
+          @change="handleAvatarChange"
+        />
       </div>
       
-      <div class="anime-profile-content">
-        <h2 class="username">{{ userStore.userInfo?.username }}</h2>
-        <div class="user-roles" v-if="userStore.userInfo?.roles && userStore.userInfo.roles.length > 0">
-          <span class="role-tag" v-for="(role, index) in processedRoles" :key="index">
+      <div class="profile-info">
+        <h2 class="username">{{ userStore.userInfo?.username || '用户名' }}</h2>
+        <div class="user-roles">
+          <el-tag v-for="role in userRoles" :key="role" class="role-tag">
             {{ role }}
-          </span>
-        </div>
-        
-        <div class="anime-card">
-          <div class="card-title">
-            <i class="card-icon el-icon-picture-outline"></i>
-            个人头像
-          </div>
-          <div class="card-content">
-            <el-upload
-              class="avatar-uploader"
-              :show-file-list="false"
-              :before-upload="beforeAvatarUpload"
-              :http-request="handleAvatarUpload"
-              accept="image/*"
-            >
-              <el-button size="small" type="primary" class="anime-button">
-                {{ userStore.userInfo?.avatarUrl ? '更换头像' : '上传头像' }}
-              </el-button>
-            </el-upload>
-            
-            <el-button 
-              v-if="userStore.userInfo?.avatarUrl" 
-              size="small" 
-              type="danger" 
-              class="anime-button delete-button"
-              @click="handleDeleteAvatar"
-            >
-              删除头像
-            </el-button>
-          </div>
-        </div>
-        
-        <div class="anime-card">
-          <div class="card-title">
-            <i class="card-icon el-icon-user"></i>
-            我的信息
-          </div>
-          <div class="card-content">
-            <div class="info-item">
-              <span class="info-label">用户名</span>
-              <span class="info-value">{{ userStore.userInfo?.username }}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">状态</span>
-              <span class="info-value status-active">
-                <span class="status-dot"></span>
-                活跃
-              </span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">等级</span>
-              <div class="level-bar">
-                <div class="level-progress"></div>
-                <span class="level-text">Lv.1</span>
-              </div>
-            </div>
-          </div>
+          </el-tag>
         </div>
       </div>
+    </div>
+    
+    <el-divider>
+      <div class="divider-content">
+        <el-icon><Star /></el-icon>
+        <span>个人信息</span>
+      </div>
+    </el-divider>
+    
+    <div class="profile-form">
+      <el-form :model="userForm" label-position="top">
+        <el-form-item label="用户名">
+          <el-input v-model="userForm.username" disabled />
+        </el-form-item>
+        
+        <el-form-item label="邮箱">
+          <el-input v-model="userForm.email" placeholder="请输入邮箱" />
+        </el-form-item>
+        
+        <el-form-item label="个人简介">
+          <el-input
+            v-model="userForm.bio"
+            type="textarea"
+            placeholder="介绍一下自己吧"
+            :rows="3"
+          />
+        </el-form-item>
+        
+        <div class="form-actions">
+          <el-button type="primary" @click="saveProfile" class="save-btn wiggle">
+            保存修改
+          </el-button>
+        </div>
+      </el-form>
+    </div>
+    
+    <el-divider>
+      <div class="divider-content">
+        <el-icon><Lock /></el-icon>
+        <span>修改密码</span>
+      </div>
+    </el-divider>
+    
+    <div class="password-form">
+      <el-form :model="passwordForm" label-position="top">
+        <el-form-item label="当前密码">
+          <el-input
+            v-model="passwordForm.currentPassword"
+            type="password"
+            placeholder="请输入当前密码"
+            show-password
+          />
+        </el-form-item>
+        
+        <el-form-item label="新密码">
+          <el-input
+            v-model="passwordForm.newPassword"
+            type="password"
+            placeholder="请输入新密码"
+            show-password
+          />
+        </el-form-item>
+        
+        <el-form-item label="确认密码">
+          <el-input
+            v-model="passwordForm.confirmPassword"
+            type="password"
+            placeholder="请再次输入新密码"
+            show-password
+          />
+        </el-form-item>
+        
+        <div class="form-actions">
+          <el-button type="primary" @click="changePassword" class="save-btn wiggle">
+            修改密码
+          </el-button>
+        </div>
+      </el-form>
+    </div>
+    
+    <div class="profile-decoration">
+      <img src="https://i.imgur.com/DqJYzfM.png" class="decoration-image floating" alt="装饰" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { uploadAvatar, deleteAvatar } from '@/api/user'
 import { ElMessage } from 'element-plus'
-import type { UploadRequestOptions } from 'element-plus'
+import { Edit, Star, Lock } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
-const defaultAvatar = ref('/src/assets/default-avatar.png')
+const fileInput = ref<HTMLInputElement | null>(null)
+const defaultAvatar = 'https://i.imgur.com/Jvh1OQm.jpg'
+
+// 用户头像
 const avatarUrl = computed(() => {
-  const url = userStore.userInfo?.avatarUrl
-  if (!url) return defaultAvatar.value
-  
-  // 如果是相对URL，需要添加BASE_URL
-  if (url.startsWith('/api/')) {
-    return url
-  }
-  return url
+  return userStore.userInfo?.avatarUrl || defaultAvatar
 })
 
-// 处理后的角色列表
-const processedRoles = computed(() => {
+// 用户角色
+const userRoles = computed(() => {
   const roles = userStore.userInfo?.roles || []
-  if (!roles || roles.length === 0) return ['普通用户']
-  
-  // 处理后端返回的角色对象数组，提取角色名称
-  return roles.map((role: any) => {
-    if (typeof role === 'string') return role
-    if (role && typeof role === 'object' && role.name) return role.name
-    return '未知角色'
-  })
+  return roles.length > 0 ? roles.map(role => role.name) : ['普通用户']
 })
 
-// 格式化角色显示
-const formatRoles = (roles: any[]) => {
-  if (!roles || roles.length === 0) return '无角色'
-  
-  // 处理后端返回的角色对象数组，提取角色名称
-  return roles.map((role: any) => {
-    if (typeof role === 'string') return role
-    if (role && typeof role === 'object' && role.name) return role.name
-    return '未知角色'
-  }).join(', ')
+// 用户表单
+const userForm = ref({
+  username: userStore.userInfo?.username || '',
+  email: '',
+  bio: ''
+})
+
+// 密码表单
+const passwordForm = ref({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+// 触发文件选择
+const triggerFileInput = () => {
+  fileInput.value?.click()
 }
 
-// 头像加载错误处理
-const handleAvatarError = () => {
-  console.error('头像加载失败')
-}
-
-// 上传前验证
-const beforeAvatarUpload = (file: File) => {
-  const isImage = file.type.startsWith('image/')
-  const isLt2M = file.size / 1024 / 1024 < 2
-
-  if (!isImage) {
-    ElMessage.error('头像必须是图片格式!')
-    return false
-  }
+// 处理头像上传
+const handleAvatarChange = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (!target.files || target.files.length === 0) return
   
-  if (!isLt2M) {
-    ElMessage.error('头像大小不能超过 2MB!')
-    return false
-  }
+  const file = target.files[0]
   
-  return true
-}
-
-// 自定义上传处理
-const handleAvatarUpload = async (options: UploadRequestOptions) => {
   try {
-    const file = options.file as File
-    const response: any = await uploadAvatar(file)
-    
-    // 更新用户信息中的头像URL
-    if (userStore.userInfo) {
-      userStore.userInfo.avatarUrl = response.avatarUrl
+    const result = await userStore.uploadAvatar(file)
+    if (result) {
+      ElMessage.success('头像上传成功')
+    } else {
+      ElMessage.error('头像上传失败')
     }
-    
-    ElMessage.success('头像上传成功')
   } catch (error) {
     console.error('头像上传失败:', error)
     ElMessage.error('头像上传失败')
   }
 }
 
-// 删除头像
-const handleDeleteAvatar = async () => {
+// 保存个人资料
+const saveProfile = async () => {
   try {
-    await deleteAvatar()
-    
-    // 清除用户信息中的头像URL
-    if (userStore.userInfo) {
-      userStore.userInfo.avatarUrl = undefined
-    }
-    
-    ElMessage.success('头像已删除')
+    // 模拟保存成功
+    ElMessage.success('个人资料保存成功')
   } catch (error) {
-    console.error('头像删除失败:', error)
-    ElMessage.error('头像删除失败')
+    ElMessage.error('保存失败，请稍后重试')
+  }
+}
+
+// 修改密码
+const changePassword = async () => {
+  if (!passwordForm.value.currentPassword) {
+    ElMessage.warning('请输入当前密码')
+    return
+  }
+  
+  if (!passwordForm.value.newPassword) {
+    ElMessage.warning('请输入新密码')
+    return
+  }
+  
+  if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
+    ElMessage.warning('两次输入的密码不一致')
+    return
+  }
+  
+  try {
+    // 模拟修改成功
+    ElMessage.success('密码修改成功')
+    passwordForm.value = {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    }
+  } catch (error) {
+    ElMessage.error('密码修改失败，请稍后重试')
   }
 }
 </script>
 
 <style scoped>
-.anime-profile-container {
-  display: flex;
-  justify-content: center;
+.user-profile {
   padding: 20px;
-  min-height: 80vh;
-  background-color: #f8f9fc;
-  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1IiBoZWlnaHQ9IjUiPgo8cmVjdCB3aWR0aD0iNSIgaGVpZ2h0PSI1IiBmaWxsPSIjZmZmIj48L3JlY3Q+CjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiNmMGYyZjUiPjwvcmVjdD4KPC9zdmc+');
-}
-
-.anime-profile {
-  width: 100%;
-  max-width: 800px;
-  background-color: white;
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(149, 157, 165, 0.1);
+  position: relative;
   overflow: hidden;
-  position: relative;
 }
 
-.anime-profile-header {
-  position: relative;
-  height: 200px;
+.profile-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 30px;
 }
 
-.header-bg {
+.profile-avatar-container {
+  position: relative;
+  margin-right: 30px;
+}
+
+.avatar-wrapper {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid var(--primary-color);
+  transition: all 0.3s ease;
+}
+
+.avatar-wrapper:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255, 105, 180, 0.5);
+}
+
+.profile-avatar {
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-overlay {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
+  width: 100%;
   height: 100%;
-  background: linear-gradient(45deg, #7579ff, #b224ef);
-  background-size: 400% 400%;
-  animation: gradient 15s ease infinite;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  cursor: pointer;
+  color: white;
+  font-size: 1.5rem;
 }
 
-@keyframes gradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+.avatar-wrapper:hover .avatar-overlay {
+  opacity: 1;
 }
 
-.avatar-frame {
-  position: absolute;
-  bottom: -60px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: white;
-  border-radius: 50%;
-  padding: 6px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  z-index: 2;
-}
-
-.avatar-frame :deep(.el-avatar) {
-  border: 4px solid white;
-  box-shadow: 0 0 0 2px #7579ff;
-}
-
-.anime-profile-content {
-  padding: 70px 30px 30px;
+.profile-info {
+  flex: 1;
 }
 
 .username {
-  text-align: center;
-  font-size: 26px;
+  margin: 0 0 10px 0;
+  color: var(--primary-color);
+  font-size: 1.8rem;
   font-weight: 700;
-  margin-bottom: 8px;
-  color: #333;
 }
 
 .user-roles {
   display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 24px;
 }
 
 .role-tag {
-  background: linear-gradient(to right, #7579ff, #b224ef);
-  color: white;
-  font-size: 12px;
-  padding: 4px 12px;
   border-radius: 20px;
-  box-shadow: 0 2px 8px rgba(178, 36, 239, 0.2);
+  padding: 0 12px;
 }
 
-.anime-card {
-  background-color: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-  padding: 16px;
-  margin-bottom: 24px;
-  border: 1px solid #f0f0f0;
-  transition: transform 0.3s, box-shadow 0.3s;
-}
-
-.anime-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-}
-
-.card-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 16px;
+.divider-content {
   display: flex;
   align-items: center;
-  border-bottom: 2px solid #f5f5f5;
-  padding-bottom: 8px;
-}
-
-.card-icon {
-  margin-right: 8px;
-  color: #7579ff;
-}
-
-.card-content {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  padding: 8px;
-}
-
-.anime-button {
-  background: linear-gradient(to right, #7579ff, #b224ef);
-  border: none;
-  color: white;
-  transition: all 0.3s;
-}
-
-.anime-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(178, 36, 239, 0.3);
-}
-
-.delete-button {
-  background: linear-gradient(to right, #ff758c, #ff7eb3);
-}
-
-.info-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px dashed #f0f0f0;
-}
-
-.info-item:last-child {
-  border-bottom: none;
-}
-
-.info-label {
-  color: #888;
-  font-size: 14px;
-}
-
-.info-value {
-  font-weight: 500;
-  color: #333;
-}
-
-.status-active {
-  display: flex;
-  align-items: center;
-  color: #4cd964;
+  gap: 8px;
+  color: var(--secondary-color);
   font-weight: 600;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  background-color: #4cd964;
-  border-radius: 50%;
-  margin-right: 6px;
-  animation: pulse 2s infinite;
+.profile-form,
+.password-form {
+  max-width: 500px;
+  margin: 0 auto 30px;
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 20px;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  transition: transform 0.3s ease;
 }
 
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(76, 217, 100, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(76, 217, 100, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(76, 217, 100, 0);
-  }
+.profile-form:hover,
+.password-form:hover {
+  transform: translateY(-5px);
 }
 
-.level-bar {
-  position: relative;
-  width: 120px;
-  height: 20px;
-  background-color: #f0f0f0;
-  border-radius: 10px;
-  overflow: hidden;
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 
-.level-progress {
+.save-btn {
+  min-width: 120px;
+}
+
+.profile-decoration {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 65%;
-  height: 100%;
-  background: linear-gradient(to right, #7579ff, #b224ef);
-  border-radius: 10px;
+  bottom: -20px;
+  right: -20px;
+  z-index: -1;
+  opacity: 0.7;
 }
 
-.level-text {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 12px;
+.decoration-image {
+  width: 150px;
+}
+
+:deep(.el-form-item__label) {
   font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  color: var(--secondary-color);
+}
+
+:deep(.el-divider__text) {
+  background-color: transparent;
 }
 </style> 

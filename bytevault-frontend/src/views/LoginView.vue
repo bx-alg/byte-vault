@@ -1,184 +1,371 @@
 <template>
   <div class="login-container">
-    <div class="login-box">
-      <div class="login-header">
-        <h2>ByteVault</h2>
-        <p>文件管理系统</p>
+    <div class="login-card">
+      <div class="card-decoration">
+        <img src="https://i.imgur.com/VW4Gct0.png" class="decoration-image floating" alt="装饰" />
       </div>
       
-      <el-form
-        ref="loginFormRef"
-        :model="loginForm"
-        :rules="loginRules"
-        label-width="0"
-        class="login-form"
-      >
-        <el-form-item prop="username">
-          <el-input
-            v-model="loginForm.username"
-            prefix-icon="el-icon-user"
-            placeholder="用户名"
-            clearable
-            @keyup.enter="handleLogin"
-          />
-        </el-form-item>
-        
-        <el-form-item prop="password">
-          <el-input
-            v-model="loginForm.password"
-            prefix-icon="el-icon-lock"
-            placeholder="密码"
-            show-password
-            clearable
-            @keyup.enter="handleLogin"
-          />
-        </el-form-item>
-        
-        <el-form-item>
-          <el-checkbox v-model="loginForm.remember">记住我</el-checkbox>
-        </el-form-item>
-        
-        <el-form-item>
-          <el-button
-            type="primary"
-            :loading="userStore.loading"
-            style="width: 100%"
-            @click="handleLogin"
-          >
-            登录
-          </el-button>
-        </el-form-item>
-        
-        <div class="register-link">
-          没有账号？<router-link to="/register">立即注册</router-link>
-        </div>
-      </el-form>
+      <h2 class="login-title">
+        <span class="title-text">ByteVault</span>
+        <span class="subtitle">文件管理系统</span>
+      </h2>
+      
+      <div class="form-container">
+        <el-tabs v-model="activeTab" class="login-tabs">
+          <el-tab-pane label="登录" name="login">
+            <el-form :model="loginForm" ref="loginFormRef" :rules="loginRules" class="login-form">
+              <el-form-item prop="username">
+                <el-input 
+                  v-model="loginForm.username"
+                  placeholder="用户名"
+                  prefix-icon="el-icon-user"
+                >
+                  <template #prefix>
+                    <el-icon><User /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              
+              <el-form-item prop="password">
+                <el-input 
+                  v-model="loginForm.password"
+                  type="password"
+                  placeholder="密码"
+                  show-password
+                >
+                  <template #prefix>
+                    <el-icon><Lock /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button 
+                  type="primary" 
+                  :loading="loading"
+                  @click="handleLogin"
+                  class="submit-btn wiggle"
+                >
+                  登录
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
+          
+          <el-tab-pane label="注册" name="register">
+            <el-form :model="registerForm" ref="registerFormRef" :rules="registerRules" class="login-form">
+              <el-form-item prop="username">
+                <el-input 
+                  v-model="registerForm.username"
+                  placeholder="用户名"
+                >
+                  <template #prefix>
+                    <el-icon><User /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              
+              <el-form-item prop="password">
+                <el-input 
+                  v-model="registerForm.password"
+                  type="password"
+                  placeholder="密码"
+                  show-password
+                >
+                  <template #prefix>
+                    <el-icon><Lock /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              
+              <el-form-item prop="confirmPassword">
+                <el-input 
+                  v-model="registerForm.confirmPassword"
+                  type="password"
+                  placeholder="确认密码"
+                  show-password
+                >
+                  <template #prefix>
+                    <el-icon><Key /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button 
+                  type="primary" 
+                  :loading="loading"
+                  @click="handleRegister"
+                  class="submit-btn wiggle"
+                >
+                  注册
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+      
+      <div class="login-footer">
+        <p>欢迎使用ByteVault文件管理系统</p>
+        <p class="copyright">© 2024 ByteVault</p>
+      </div>
+    </div>
+    
+    <div class="bottom-decoration">
+      <img src="https://i.imgur.com/8nLFCVn.png" class="bottom-image" alt="页脚装饰" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
-import type { FormInstance } from 'element-plus'
+import { User, Lock, Key } from '@element-plus/icons-vue'
+import type { FormInstance, FormRules } from 'element-plus'
 
-// 引入用户store
+const router = useRouter()
 const userStore = useUserStore()
+const loading = ref(false)
+const activeTab = ref('login')
 
-// 表单ref
+// 登录表单
 const loginFormRef = ref<FormInstance>()
-
-// 表单数据
 const loginForm = reactive({
   username: '',
-  password: '',
-  remember: false
+  password: ''
 })
 
-// 表单校验规则
-const loginRules = {
+// 注册表单
+const registerFormRef = ref<FormInstance>()
+const registerForm = reactive({
+  username: '',
+  password: '',
+  confirmPassword: ''
+})
+
+// 表单验证规则
+const loginRules = reactive<FormRules>({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 64, message: '用户名长度应在3到64个字符之间', trigger: 'blur' }
+    { min: 3, max: 20, message: '用户名长度应为3-20个字符', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 5, max: 64, message: '密码长度应在5到64个字符之间', trigger: 'blur' }
+    { min: 6, max: 20, message: '密码长度应为6-20个字符', trigger: 'blur' }
   ]
-}
+})
 
-// 登录处理函数
+const registerRules = reactive<FormRules>({
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 3, max: 20, message: '用户名长度应为3-20个字符', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, max: 20, message: '密码长度应为6-20个字符', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请确认密码', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (value !== registerForm.password) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+})
+
+// 登录处理
 const handleLogin = async () => {
   if (!loginFormRef.value) return
   
   await loginFormRef.value.validate(async (valid) => {
     if (valid) {
+      loading.value = true
       try {
-        const success = await userStore.loginAction(
-          loginForm.username,
-          loginForm.password
-        )
-        
-        if (success) {
+        const result = await userStore.loginAction(loginForm.username, loginForm.password)
+        if (result) {
           ElMessage.success('登录成功')
+          router.push('/')
         } else {
           ElMessage.error('登录失败，请检查用户名和密码')
         }
       } catch (error) {
-        console.error('登录错误:', error)
-        ElMessage.error('登录过程中发生错误')
+        console.error('登录失败:', error)
+        ElMessage.error('登录失败，请稍后重试')
+      } finally {
+        loading.value = false
       }
-    } else {
-      return false
     }
   })
 }
 
-// 尝试从localStorage恢复记住的用户名
-onMounted(() => {
-  const savedUsername = localStorage.getItem('remembered_username')
-  if (savedUsername) {
-    loginForm.username = savedUsername
-    loginForm.remember = true
-  }
-})
+// 注册处理
+const handleRegister = async () => {
+  if (!registerFormRef.value) return
+  
+  await registerFormRef.value.validate(async (valid) => {
+    if (valid) {
+      loading.value = true
+      try {
+        const result = await userStore.registerAction(
+          registerForm.username, 
+          registerForm.password,
+          registerForm.confirmPassword
+        )
+        
+        if (result) {
+          ElMessage.success('注册成功，请登录')
+          activeTab.value = 'login'
+          loginForm.username = registerForm.username
+          loginForm.password = ''
+          
+          // 清空注册表单
+          registerForm.username = ''
+          registerForm.password = ''
+          registerForm.confirmPassword = ''
+        } else {
+          ElMessage.error('注册失败，用户名可能已存在')
+        }
+      } catch (error) {
+        console.error('注册失败:', error)
+        ElMessage.error('注册失败，请稍后重试')
+      } finally {
+        loading.value = false
+      }
+    }
+  })
+}
 </script>
-
-
-
 
 <style scoped>
 .login-container {
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  background-color: var(--background-color);
-  background-image: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 20px;
+  position: relative;
 }
 
-.login-box {
-  width: 360px;
+.login-card {
+  width: 100%;
+  max-width: 450px;
+  background-color: var(--card-bg-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
   padding: 30px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 105, 180, 0.2);
+  z-index: 1;
 }
 
-.login-header {
+.card-decoration {
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  z-index: -1;
+  opacity: 0.8;
+}
+
+.decoration-image {
+  width: 150px;
+}
+
+.login-title {
   text-align: center;
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.title-text {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--primary-color);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  display: block;
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  color: var(--secondary-color);
+  font-weight: normal;
+}
+
+.form-container {
   margin-bottom: 30px;
 }
 
-.login-header h2 {
-  font-size: 28px;
-  color: var(--primary-color);
-  margin-bottom: 8px;
+.login-tabs :deep(.el-tabs__item) {
+  font-size: 1.1rem;
+  padding: 0 20px;
+  color: var(--text-color);
 }
 
-.login-header p {
-  font-size: 16px;
-  color: var(--text-color-secondary);
-  margin: 0;
+.login-tabs :deep(.el-tabs__active-bar) {
+  background-color: var(--primary-color);
+  height: 3px;
+  border-radius: 3px;
+}
+
+.login-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--primary-color);
+  font-weight: 600;
 }
 
 .login-form {
   margin-top: 20px;
 }
 
-.register-link {
-  text-align: center;
-  margin-top: 15px;
-  font-size: 14px;
+.login-form :deep(.el-input__inner) {
+  height: 50px;
+  font-size: 16px;
 }
 
-.register-link a {
+.login-form :deep(.el-input__prefix) {
+  display: flex;
+  align-items: center;
   color: var(--primary-color);
-  text-decoration: none;
+  font-size: 18px;
 }
 
-.register-link a:hover {
-  text-decoration: underline;
+.submit-btn {
+  width: 100%;
+  height: 50px;
+  font-size: 16px;
+  letter-spacing: 2px;
+  margin-top: 10px;
+}
+
+.login-footer {
+  text-align: center;
+  color: var(--light-text);
+  font-size: 0.9rem;
+}
+
+.copyright {
+  margin-top: 5px;
+  font-size: 0.8rem;
+}
+
+.bottom-decoration {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  z-index: 0;
+}
+
+.bottom-image {
+  width: 200px;
+  opacity: 0.7;
 }
 </style> 

@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login, logout, getUserInfo } from '@/api/auth'
+import { login, logout, getUserInfo, register } from '@/api/auth'
 import router from '@/router'
+import { uploadAvatar } from '@/api/user'
 
 export interface UserInfo {
   id: number
@@ -110,6 +111,43 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  // 注册操作
+  const registerAction = async (username: string, password: string, confirmPassword: string) => {
+    try {
+      loading.value = true
+      const response = await register(username, password, confirmPassword)
+      return response && response.username === username
+    } catch (error) {
+      console.error('注册失败:', error)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 上传头像
+  const uploadAvatarAction = async (file: File) => {
+    try {
+      loading.value = true
+      const response = await uploadAvatar(file)
+      
+      // 假设后端返回的数据结构中包含avatarUrl字段
+      if (response && userInfo.value) {
+        // 如果后端返回了新的头像URL，则更新用户信息
+        if (response.data && response.data.avatarUrl) {
+          userInfo.value.avatarUrl = response.data.avatarUrl
+        }
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('上传头像失败:', error)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     token,
     userInfo,
@@ -120,6 +158,8 @@ export const useUserStore = defineStore('user', () => {
     logoutAction,
     fetchUserInfo,
     checkSession,
-    init
+    init,
+    registerAction,
+    uploadAvatar: uploadAvatarAction
   }
 }) 
