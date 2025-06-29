@@ -2,7 +2,7 @@
   <div class="login-container">
     <div class="login-card">
       <div class="card-decoration">
-        <img src="https://i.imgur.com/VW4Gct0.png" class="decoration-image floating" alt="装饰" />
+        <img src="@/assets/cute.jpeg" class="decoration-image floating" alt="装饰" />
       </div>
       
       <h2 class="login-title">
@@ -113,7 +113,7 @@
     </div>
     
     <div class="bottom-decoration">
-      <img src="https://i.imgur.com/8nLFCVn.png" class="bottom-image" alt="页脚装饰" />
+      <img src="@/assets/_.jpeg" class="bottom-image" alt="页脚装饰" />
     </div>
   </div>
 </template>
@@ -154,7 +154,7 @@ const loginRules = reactive<FormRules>({
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度应为6-20个字符', trigger: 'blur' }
+    { min: 5, max: 20, message: '密码长度应为5-20个字符', trigger: 'blur' }
   ]
 })
 
@@ -165,7 +165,7 @@ const registerRules = reactive<FormRules>({
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度应为6-20个字符', trigger: 'blur' }
+    { min: 5, max: 20, message: '密码长度应为5-20个字符', trigger: 'blur' }
   ],
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },

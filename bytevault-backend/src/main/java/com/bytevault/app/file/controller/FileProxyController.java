@@ -66,11 +66,14 @@ public class FileProxyController {
                 return ResponseEntity.badRequest().build();
             }
             
+            // 构建MinIO对象名称
+            String minioObjectName = fileInfo.getUserId() + "/" + fileInfo.getFilename();
+            
             // 从MinIO获取文件
             InputStream inputStream = minioClient.getObject(
                     GetObjectArgs.builder()
                             .bucket(userFilesBucket)
-                            .object(fileInfo.getObjectName())
+                            .object(minioObjectName)
                             .build());
             
             // 设置响应头

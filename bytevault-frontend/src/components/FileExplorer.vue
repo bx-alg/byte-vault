@@ -32,28 +32,51 @@
           </template>
         </el-input>
         
-        <el-button
-          v-if="showCreateFolder"
-          type="success"
-          @click="createNewFolder"
-          class="action-button wiggle"
-        >
-          <el-icon><Folder /></el-icon>
-          新建文件夹
-        </el-button>
-        
-        <el-upload
-          v-if="showUpload"
-          class="upload-button"
-          :show-file-list="false"
-          :http-request="customUpload"
-          :multiple="false"
-        >
-          <el-button type="primary" class="action-button wiggle">
-            <el-icon><Upload /></el-icon>
-            上传文件
+        <div class="buttons-container">
+          <el-button
+            v-if="showCreateFolder"
+            type="success"
+            @click="createNewFolder"
+            class="action-button wiggle"
+          >
+            <el-icon><Folder /></el-icon>
+            新建文件夹
           </el-button>
-        </el-upload>
+          
+          <el-upload
+            v-if="showUpload"
+            class="upload-button"
+            :show-file-list="false"
+            :http-request="customUpload"
+            :multiple="false"
+          >
+            <el-button type="primary" class="action-button wiggle">
+              <el-icon><Upload /></el-icon>
+              上传文件
+            </el-button>
+          </el-upload>
+          
+          <el-button
+            v-if="showUpload"
+            type="warning"
+            @click="triggerFolderUpload"
+            class="action-button wiggle"
+          >
+            <el-icon><FolderAdd /></el-icon>
+            上传文件夹
+          </el-button>
+          
+          <!-- 隐藏的文件夹上传输入 -->
+          <input
+            ref="folderInput"
+            type="file"
+            @change="handleFolderUpload"
+            webkitdirectory
+            directory
+            multiple
+            style="display: none"
+          />
+        </div>
       </div>
     </div>
     
@@ -78,7 +101,7 @@
       </div>
       
       <el-empty v-else-if="fileList.length === 0" description="暂无文件" class="empty-files">
-        <img src="https://i.imgur.com/JXmxKxN.png" class="empty-image floating" alt="暂无文件" />
+        <img src="@/assets/cute.jpeg" class="empty-image floating" alt="暂无文件" />
       </el-empty>
       
       <el-table
@@ -126,32 +149,38 @@
         
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
-            <el-button 
-              size="small" 
-              @click="handleDownload(scope.row)"
-              v-if="!scope.row.isDir"
-              class="action-btn wiggle"
-            >
-              下载
-            </el-button>
-            <el-button 
-              v-if="scope.row.userId === userStore.userInfo?.id"
-              size="small" 
-              type="danger" 
-              @click="handleDelete(scope.row)"
-              class="action-btn wiggle"
-            >
-              删除
-            </el-button>
-            <el-button
-              v-if="scope.row.userId === userStore.userInfo?.id && !scope.row.isDir"
-              size="small"
-              type="info"
-              @click="handleTogglePublic(scope.row)"
-              class="action-btn wiggle"
-            >
-              {{ scope.row.visibility === 'public' ? '设为私有' : '设为公开' }}
-            </el-button>
+            <div class="file-operations">
+              <div class="operation-row">
+                <el-button 
+                  size="small" 
+                  @click="handleDownload(scope.row)"
+                  v-if="!scope.row.isDir"
+                  class="action-btn wiggle"
+                >
+                  下载
+                </el-button>
+                <el-button 
+                  v-if="scope.row.userId === userStore.userInfo?.id"
+                  size="small" 
+                  type="danger" 
+                  @click="handleDelete(scope.row)"
+                  class="action-btn wiggle"
+                >
+                  删除
+                </el-button>
+              </div>
+              
+              <div class="operation-row" v-if="scope.row.userId === userStore.userInfo?.id && !scope.row.isDir">
+                <el-button
+                  size="small"
+                  type="info"
+                  @click="handleTogglePublic(scope.row)"
+                  class="action-btn wiggle visibility-btn"
+                >
+                  {{ scope.row.visibility === 'public' ? '设为私有' : '设为公开' }}
+                </el-button>
+              </div>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -176,7 +205,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Search, Upload, Folder } from '@element-plus/icons-vue'
+import { Document, Search, Upload, Folder, FolderAdd } from '@element-plus/icons-vue'
 import { fileApi } from '@/api'
 import type { UploadRequestOptions } from 'element-plus'
 
@@ -213,6 +242,9 @@ const isSearching = ref(false)
 // 计算属性
 const showUpload = computed(() => props.type === 'my-files')
 const showCreateFolder = computed(() => props.type === 'my-files')
+
+// 文件夹上传相关
+const folderInput = ref<HTMLInputElement | null>(null)
 
 // 监听类型变化，重置状态并加载文件
 watch(() => props.type, () => {
@@ -512,6 +544,46 @@ const formatDate = (dateStr: string) => {
   return date.toLocaleString()
 }
 
+// 触发文件夹上传
+const triggerFolderUpload = () => {
+  folderInput.value?.click()
+}
+
+// 处理文件夹上传
+const handleFolderUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+  
+  loading.value = true
+  emit('update:loading', true)
+  
+  try {
+    const files = Array.from(input.files)
+    const relativePaths: string[] = []
+    
+    // 获取所有文件的相对路径
+    for (const file of files) {
+      // 在Chrome中，webkitRelativePath属性包含文件的相对路径
+      const path = (file as any).webkitRelativePath
+      relativePaths.push(path)
+    }
+    
+    // 调用上传API
+    const response = await fileApi.uploadFolder(files, relativePaths, currentDirectory.value.id, false)
+    
+    ElMessage.success('文件夹上传成功')
+    loadFiles() // 重新加载文件列表
+  } catch (error: any) {
+    console.error('文件夹上传失败', error)
+    ElMessage.error(`文件夹上传失败: ${error.message || '未知错误'}`)
+  } finally {
+    loading.value = false
+    emit('update:loading', false)
+    // 重置输入框，以便可以再次选择同一文件夹
+    if (input) input.value = ''
+  }
+}
+
 // 组件挂载时加载文件列表
 onMounted(() => {
   loadFiles()
@@ -532,7 +604,7 @@ defineExpose({
 .file-actions {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 20px;
 }
 
@@ -541,9 +613,18 @@ defineExpose({
   margin-right: 15px;
 }
 
+.buttons-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
 .action-button {
   margin-left: 10px;
 }
+
+/* 删除上传按钮容器样式 */
 
 .file-list-card {
   margin-bottom: 20px;
@@ -638,7 +719,7 @@ defineExpose({
 }
 
 .search-result-text {
-  background-color: rgba(255, 105, 180, 0.1);
+  background-color: rgba(255, 105, 180, 0.15);
   padding: 4px 12px;
   border-radius: 20px;
   color: var(--primary-color);
@@ -647,5 +728,23 @@ defineExpose({
 
 .action-btn {
   margin: 0 3px;
+}
+
+/* 文件操作按钮布局 */
+.file-operations {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.operation-row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.visibility-btn {
+  min-width: 90px;
 }
 </style> 

@@ -12,7 +12,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -47,6 +49,43 @@ public class FileController {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("message", "文件上传失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 上传文件夹
+     */
+    @PostMapping("/upload-folder")
+    public ResponseEntity<Map<String, Object>> uploadFolder(
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam("relativePaths") List<String> relativePaths,
+            @RequestParam(value = "parentId", required = false, defaultValue = "0") Long parentId,
+            @RequestParam(value = "isPublic", defaultValue = "false") boolean isPublic,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        
+        try {
+            List<FileInfo> uploadedFiles = fileService.uploadFolder(files, relativePaths, userDetails.getId(), parentId, isPublic);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "文件夹上传成功");
+            response.put("fileCount", uploadedFiles.size());
+            
+            List<Map<String, Object>> fileInfoList = new ArrayList<>();
+            for (FileInfo fileInfo : uploadedFiles) {
+                Map<String, Object> fileInfoMap = new HashMap<>();
+                fileInfoMap.put("id", fileInfo.getId());
+                fileInfoMap.put("name", fileInfo.getFilename());
+                fileInfoMap.put("isDir", fileInfo.getIsDir());
+                fileInfoMap.put("parentId", fileInfo.getParentId());
+                fileInfoList.add(fileInfoMap);
+            }
+            response.put("files", fileInfoList);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "文件夹上传失败: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }

@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bytevault.app.mapper.FileMapper;
 import com.bytevault.app.mapper.UserMapper;
 import com.bytevault.app.model.FileInfo;
-import com.bytevault.app.model.User;
 import io.minio.*;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -54,14 +53,14 @@ public class FileServiceImpl implements FileService {
             }
             
             // 构建对象名: 用户ID/文件名
-            String objectName = userId + "/" + originalFilename;
+            String minioObjectName = userId + "/" + originalFilename;
             
             // 上传文件到MinIO
             InputStream inputStream = file.getInputStream();
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(userFilesBucket)
-                            .object(objectName)
+                            .object(minioObjectName)
                             .stream(inputStream, file.getSize(), -1)
                             .contentType(file.getContentType())
                             .build());
@@ -71,7 +70,6 @@ public class FileServiceImpl implements FileService {
             fileInfo.setUserId(userId);
             fileInfo.setFilename(originalFilename);
             fileInfo.setParentId(parentId);
-            fileInfo.setObjectName(objectName);
             fileInfo.setFileSize(file.getSize());
             fileInfo.setFileType(file.getContentType());
             fileInfo.setIsDir(false);
@@ -82,11 +80,127 @@ public class FileServiceImpl implements FileService {
             
             fileMapper.insert(fileInfo);
             
-            log.info("文件上传成功: {}, 用户ID: {}", objectName, userId);
+            log.info("文件上传成功: {}, 用户ID: {}", minioObjectName, userId);
             return fileInfo;
         } catch (Exception e) {
             log.error("文件上传失败: {}", e.getMessage(), e);
             throw new RuntimeException("文件上传失败", e);
+        }
+    }
+    
+    @Override
+    @Transactional
+    public List<FileInfo> uploadFolder(List<MultipartFile> files, List<String> relativePaths, Long userId, Long parentId, boolean isPublic) {
+        try {
+            List<FileInfo> uploadedFiles = new ArrayList<>();
+            Map<String, Long> pathToFolderId = new HashMap<>();
+            
+            // 记录根目录ID
+            pathToFolderId.put("", parentId);
+            
+            // 处理每个文件
+            for (int i = 0; i < files.size(); i++) {
+                MultipartFile file = files.get(i);
+                String relativePath = relativePaths.get(i);
+                
+                // 跳过空文件（可能是文件夹占位符）
+                if (file.isEmpty() && !relativePath.endsWith("/")) {
+                    continue;
+                }
+                
+                // 解析路径
+                String[] pathParts = relativePath.split("/");
+                StringBuilder currentPath = new StringBuilder();
+                Long currentParentId = parentId;
+                
+                // 创建或获取文件夹路径
+                for (int j = 0; j < pathParts.length - 1; j++) {
+                    String folderName = pathParts[j];
+                    if (folderName.isEmpty()) {
+                        continue;
+                    }
+                    
+                    // 构建当前路径
+                    if (currentPath.length() > 0) {
+                        currentPath.append("/");
+                    }
+                    currentPath.append(folderName);
+                    String pathKey = currentPath.toString();
+                    
+                    // 检查路径是否已处理
+                    if (pathToFolderId.containsKey(pathKey)) {
+                        currentParentId = pathToFolderId.get(pathKey);
+                        continue;
+                    }
+                    
+                    // 检查文件夹是否已存在
+                    LambdaQueryWrapper<FileInfo> queryWrapper = new LambdaQueryWrapper<>();
+                    queryWrapper.eq(FileInfo::getUserId, userId)
+                               .eq(FileInfo::getParentId, currentParentId)
+                               .eq(FileInfo::getFilename, folderName)
+                               .eq(FileInfo::getIsDir, true)
+                               .eq(FileInfo::getDeleted, false);
+                    
+                    FileInfo existingFolder = fileMapper.selectOne(queryWrapper);
+                    
+                    if (existingFolder != null) {
+                        // 使用已存在的文件夹
+                        currentParentId = existingFolder.getId();
+                        pathToFolderId.put(pathKey, currentParentId);
+                    } else {
+                        // 创建新文件夹
+                        FileInfo newFolder = createFolder(userId, currentParentId, folderName);
+                        currentParentId = newFolder.getId();
+                        pathToFolderId.put(pathKey, currentParentId);
+                        uploadedFiles.add(newFolder);
+                    }
+                }
+                
+                // 如果是文件夹标记（通常是空文件夹），跳过文件上传
+                if (relativePath.endsWith("/")) {
+                    continue;
+                }
+                
+                // 上传文件
+                String filename = pathParts[pathParts.length - 1];
+                
+                // 构建对象名: 用户ID/相对路径
+                String minioObjectName = userId + "/" + relativePath;
+                
+                // 上传文件到MinIO
+                InputStream inputStream = file.getInputStream();
+                minioClient.putObject(
+                        PutObjectArgs.builder()
+                                .bucket(userFilesBucket)
+                                .object(minioObjectName)
+                                .stream(inputStream, file.getSize(), -1)
+                                .contentType(file.getContentType())
+                                .build());
+                
+                // 保存文件信息到数据库
+                FileInfo fileInfo = new FileInfo();
+                fileInfo.setUserId(userId);
+                fileInfo.setFilename(filename);
+                fileInfo.setParentId(currentParentId);
+                // 不再设置objectName字段
+                fileInfo.setFileSize(file.getSize());
+                fileInfo.setFileType(file.getContentType());
+                fileInfo.setIsDir(false);
+                fileInfo.setVisibility(isPublic ? "public" : "private");
+                fileInfo.setDeleted(false);
+                fileInfo.setCreateTime(LocalDateTime.now());
+                fileInfo.setUpdateTime(LocalDateTime.now());
+                
+                fileMapper.insert(fileInfo);
+                uploadedFiles.add(fileInfo);
+                
+                log.info("文件上传成功: {}, 用户ID: {}", minioObjectName, userId);
+            }
+            
+            return uploadedFiles;
+        } catch (Exception e) {
+            log.error("文件夹上传失败: {}", e.getMessage(), e);
+            throw new RuntimeException("文件夹上传失败", e);
         }
     }
 
@@ -109,10 +223,12 @@ public class FileServiceImpl implements FileService {
             
             // 如果是文件，从MinIO中删除
             if (!fileInfo.getIsDir()) {
+                // 构建MinIO对象名称
+                String minioObjectName = userId + "/" + fileInfo.getFilename();
                 minioClient.removeObject(
                         RemoveObjectArgs.builder()
                                 .bucket(userFilesBucket)
-                                .object(fileInfo.getObjectName())
+                                .object(minioObjectName)
                                 .build());
             }
             
@@ -149,12 +265,15 @@ public class FileServiceImpl implements FileService {
                 return null;
             }
             
+            // 构建MinIO对象名称
+            String minioObjectName = userId + "/" + fileInfo.getFilename();
+            
             // 生成预签名URL
             String url = minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(userFilesBucket)
-                            .object(fileInfo.getObjectName())
+                            .object(minioObjectName)
                             .expiry(1, TimeUnit.HOURS) // URL有效期1小时
                             .build());
             
@@ -176,11 +295,14 @@ public class FileServiceImpl implements FileService {
             for (FileInfo fileInfo : result.getRecords()) {
                 if (!fileInfo.getIsDir()) {
                     try {
+                        // 构建MinIO对象名称
+                        String minioObjectName = fileInfo.getUserId() + "/" + fileInfo.getFilename();
+                        
                         String url = minioClient.getPresignedObjectUrl(
                                 GetPresignedObjectUrlArgs.builder()
                                         .method(Method.GET)
                                         .bucket(userFilesBucket)
-                                        .object(fileInfo.getObjectName())
+                                        .object(minioObjectName)
                                         .expiry(1, TimeUnit.HOURS)
                                         .build());
                         fileInfo.setDownloadUrl(url);
@@ -207,11 +329,14 @@ public class FileServiceImpl implements FileService {
             for (FileInfo fileInfo : result.getRecords()) {
                 if (!fileInfo.getIsDir()) {
                     try {
+                        // 构建MinIO对象名称
+                        String minioObjectName = fileInfo.getUserId() + "/" + fileInfo.getFilename();
+                        
                         String url = minioClient.getPresignedObjectUrl(
                                 GetPresignedObjectUrlArgs.builder()
                                         .method(Method.GET)
                                         .bucket(userFilesBucket)
-                                        .object(fileInfo.getObjectName())
+                                        .object(minioObjectName)
                                         .expiry(1, TimeUnit.HOURS)
                                         .build());
                         fileInfo.setDownloadUrl(url);
@@ -240,11 +365,14 @@ public class FileServiceImpl implements FileService {
                     try {
                         // 只为用户有权限访问的文件生成下载URL
                         if (fileInfo.getUserId().equals(userId) || "public".equals(fileInfo.getVisibility())) {
+                            // 构建MinIO对象名称
+                            String minioObjectName = fileInfo.getUserId() + "/" + fileInfo.getFilename();
+                            
                             String url = minioClient.getPresignedObjectUrl(
                                     GetPresignedObjectUrlArgs.builder()
                                             .method(Method.GET)
                                             .bucket(userFilesBucket)
-                                            .object(fileInfo.getObjectName())
+                                            .object(minioObjectName)
                                             .expiry(1, TimeUnit.HOURS)
                                             .build());
                             fileInfo.setDownloadUrl(url);
@@ -322,7 +450,6 @@ public class FileServiceImpl implements FileService {
             folder.setUserId(userId);
             folder.setFilename(folderName);
             folder.setParentId(parentId);
-            folder.setObjectName(null); // 目录没有对应的对象
             folder.setFileSize(0L);
             folder.setFileType("directory");
             folder.setIsDir(true);

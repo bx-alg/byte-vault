@@ -24,6 +24,36 @@ export function uploadFile(file: File, parentId: number = 0, isPublic: boolean =
 }
 
 /**
+ * 上传文件夹
+ * @param files 文件列表
+ * @param relativePaths 文件相对路径列表
+ * @param parentId 父目录ID
+ * @param isPublic 是否公开
+ * @returns 上传结果
+ */
+export function uploadFolder(files: File[], relativePaths: string[], parentId: number = 0, isPublic: boolean = false) {
+  const formData = new FormData()
+  
+  // 添加每个文件和对应的相对路径
+  files.forEach((file, index) => {
+    formData.append('files', file)
+    formData.append('relativePaths', relativePaths[index])
+  })
+  
+  formData.append('parentId', parentId.toString())
+  formData.append('isPublic', isPublic ? 'true' : 'false')
+  
+  return request({
+    url: '/api/files/upload-folder',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+/**
  * 删除文件
  * @param fileId 文件ID
  * @returns 删除结果
@@ -155,6 +185,7 @@ export const fileApi = {
   getUserFiles,
   getPublicFiles,
   uploadFile,
+  uploadFolder,
   createFolder,
   getFileDownloadUrl,
   deleteFile,

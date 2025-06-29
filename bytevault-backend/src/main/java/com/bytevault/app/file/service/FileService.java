@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.bytevault.app.model.FileInfo;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /**
  * 文件服务接口
  */
@@ -18,6 +20,17 @@ public interface FileService {
      * @return 文件信息
      */
     FileInfo uploadFile(MultipartFile file, Long userId, Long parentId, boolean isPublic);
+    
+    /**
+     * 上传文件夹
+     * @param files 文件列表
+     * @param relativePaths 相对路径列表
+     * @param userId 用户ID
+     * @param parentId 父目录ID
+     * @param isPublic 是否公开
+     * @return 上传的文件列表
+     */
+    List<FileInfo> uploadFolder(List<MultipartFile> files, List<String> relativePaths, Long userId, Long parentId, boolean isPublic);
     
     /**
      * 删除文件

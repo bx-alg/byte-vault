@@ -31,9 +31,6 @@ public class FileInfo {
     @TableField("parent_id")
     private Long parentId;
     
-    @TableField("object_name")
-    private String objectName;
-    
     @TableField("file_size")
     private Long fileSize;
     

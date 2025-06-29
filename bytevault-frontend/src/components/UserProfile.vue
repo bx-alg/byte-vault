@@ -106,7 +106,7 @@
     </div>
     
     <div class="profile-decoration">
-      <img src="https://i.imgur.com/DqJYzfM.png" class="decoration-image floating" alt="装饰" />
+      <img src="@/assets/_.jpeg" class="decoration-image floating" alt="装饰" />
     </div>
   </div>
 </template>

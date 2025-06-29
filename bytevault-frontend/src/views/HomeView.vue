@@ -3,7 +3,7 @@
     <!-- 页面标题 -->
     <div class="page-header">
       <div class="title-container">
-        <img src="https://i.imgur.com/QKnfQiS.png" class="title-decoration floating" alt="装饰" />
+        <img src="@/assets/cute.jpeg" class="title-decoration floating" alt="装饰" />
         <h1 class="main-title">ByteVault <span class="subtitle">文件管理系统</span></h1>
       </div>
       
@@ -48,7 +48,7 @@
     
     <!-- 页脚装饰 -->
     <div class="footer-decoration">
-      <img src="https://i.imgur.com/8nLFCVn.png" class="footer-image" alt="页脚装饰" />
+      
     </div>
   </div>
 </template>
