@@ -17,69 +17,50 @@
           </template>
         </el-breadcrumb>
       </div>
-      
+
       <div class="right-actions">
-        <el-input
-          v-model="searchKeyword"
-          placeholder="搜索文件"
-          class="search-input"
-          @keyup.enter="handleSearch"
-        >
+        <el-input v-model="searchKeyword" placeholder="搜索文件" class="search-input" @keyup.enter="handleSearch">
           <template #append>
             <el-button @click="handleSearch">
-              <el-icon><Search /></el-icon>
+              <el-icon>
+                <Search />
+              </el-icon>
             </el-button>
           </template>
         </el-input>
-        
+
         <div class="buttons-container">
-          <el-button
-            v-if="showCreateFolder"
-            type="success"
-            @click="createNewFolder"
-            class="action-button wiggle"
-          >
-            <el-icon><Folder /></el-icon>
+          <el-button v-if="showCreateFolder" type="success" @click="createNewFolder" class="action-button wiggle">
+            <el-icon>
+              <Folder />
+            </el-icon>
             新建文件夹
           </el-button>
-          
-          <el-upload
-            v-if="showUpload"
-            class="upload-button"
-            :show-file-list="false"
-            :http-request="customUpload"
-            :multiple="false"
-          >
+
+          <el-upload v-if="showUpload" class="upload-button" :show-file-list="false" :http-request="customUpload"
+            :multiple="false">
             <el-button type="primary" class="action-button wiggle">
-              <el-icon><Upload /></el-icon>
+              <el-icon>
+                <Upload />
+              </el-icon>
               上传文件
             </el-button>
           </el-upload>
-          
-          <el-button
-            v-if="showUpload"
-            type="warning"
-            @click="triggerFolderUpload"
-            class="action-button wiggle"
-          >
-            <el-icon><FolderAdd /></el-icon>
+
+          <el-button v-if="showUpload" type="warning" @click="triggerFolderUpload" class="action-button wiggle">
+            <el-icon>
+              <FolderAdd />
+            </el-icon>
             上传文件夹
           </el-button>
-          
+
           <!-- 隐藏的文件夹上传输入 -->
-          <input
-            ref="folderInput"
-            type="file"
-            @change="handleFolderUpload"
-            webkitdirectory
-            directory
-            multiple
-            style="display: none"
-          />
+          <input ref="folderInput" type="file" @change="handleFolderUpload" webkitdirectory directory multiple
+            style="display: none" />
         </div>
       </div>
     </div>
-    
+
     <!-- 文件列表 -->
     <el-card class="file-list-card">
       <template #header>
@@ -94,51 +75,48 @@
           </span>
         </div>
       </template>
-      
+
       <div v-if="loading" class="cute-loading-container">
         <div class="cute-loading"></div>
         <div class="loading-text">加载中...</div>
       </div>
-      
+
       <el-empty v-else-if="fileList.length === 0" description="暂无文件" class="empty-files">
         <img src="@/assets/cute.jpeg" class="empty-image floating" alt="暂无文件" />
       </el-empty>
-      
-      <el-table
-        v-else
-        v-loading="loading"
-        :data="fileList"
-        style="width: 100%"
-      >
+
+      <el-table v-else v-loading="loading" :data="fileList" style="width: 100%">
         <el-table-column label="文件名" prop="filename" min-width="200">
           <template #default="scope">
             <div class="file-name-cell">
-              <el-icon v-if="scope.row.isDir" class="file-icon folder-icon"><Folder /></el-icon>
-              <el-icon v-else class="file-icon"><Document /></el-icon>
-              <span 
-                :class="{ 'folder-name': scope.row.isDir }"
-                @click="scope.row.isDir ? navigateToFolder(scope.row) : handleDownload(scope.row)"
-              >
+              <el-icon v-if="scope.row.isDir" class="file-icon folder-icon">
+                <Folder />
+              </el-icon>
+              <el-icon v-else class="file-icon">
+                <Document />
+              </el-icon>
+              <span :class="{ 'folder-name': scope.row.isDir }"
+                @click="scope.row.isDir ? navigateToFolder(scope.row) : handleDownload(scope.row)">
                 {{ scope.row.filename }}
               </span>
             </div>
           </template>
         </el-table-column>
-        
+
         <el-table-column label="大小" prop="fileSize" width="120">
           <template #default="scope">
             {{ scope.row.isDir ? '-' : formatFileSize(scope.row.fileSize) }}
           </template>
         </el-table-column>
-        
+
         <el-table-column label="所有者" prop="ownerName" width="120" />
-        
+
         <el-table-column label="上传时间" prop="createTime" width="180">
           <template #default="scope">
             {{ formatDate(scope.row.createTime) }}
           </template>
         </el-table-column>
-        
+
         <el-table-column label="状态" prop="visibility" width="100">
           <template #default="scope">
             <el-tag :type="scope.row.visibility === 'public' ? 'success' : 'info'" class="status-tag">
@@ -146,7 +124,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        
+
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
             <div class="file-operations">
@@ -170,7 +148,7 @@
                 </el-button>
               </div>
               
-              <div class="operation-row" v-if="scope.row.userId === userStore.userInfo?.id && !scope.row.isDir">
+              <div class="operation-row" v-if="scope.row.userId === userStore.userInfo?.id">
                 <el-button
                   size="small"
                   type="info"
@@ -184,30 +162,25 @@
           </template>
         </el-table-column>
       </el-table>
-      
+
       <!-- 分页 -->
       <div class="pagination-container">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          :total="total"
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-        />
+        <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper" :total="total" @size-change="handleSizeChange"
+          @current-change="handleCurrentChange" />
       </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Search, Upload, Folder, FolderAdd } from '@element-plus/icons-vue'
 import { fileApi } from '@/api'
 import type { UploadRequestOptions } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 
 // 定义组件属性
 const props = defineProps({
@@ -228,6 +201,8 @@ const props = defineProps({
 const emit = defineEmits(['update:loading'])
 
 const userStore = useUserStore()
+const route = useRoute()
+const router = useRouter()
 
 // 文件管理相关数据
 const currentDirectory = ref({ id: 0, name: '根目录' })
@@ -246,6 +221,36 @@ const showCreateFolder = computed(() => props.type === 'my-files')
 // 文件夹上传相关
 const folderInput = ref<HTMLInputElement | null>(null)
 
+// 监听浏览器历史记录变化
+const handlePopState = (event: PopStateEvent) => {
+  if (event.state && event.state.directoryId !== undefined) {
+    const historyState = event.state
+    currentDirectory.value = { 
+      id: historyState.directoryId, 
+      name: historyState.directoryName || '根目录' 
+    }
+    loadFiles()
+  }
+}
+
+// 添加和移除popstate事件监听器
+onMounted(() => {
+  window.addEventListener('popstate', handlePopState)
+  
+  // 初始化历史状态
+  if (!window.history.state) {
+    window.history.replaceState(
+      { directoryId: 0, directoryName: '根目录' }, 
+      '', 
+      window.location.pathname
+    )
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('popstate', handlePopState)
+})
+
 // 监听类型变化，重置状态并加载文件
 watch(() => props.type, () => {
   resetState()
@@ -258,16 +263,23 @@ const resetState = () => {
   currentPage.value = 1
   isSearching.value = false
   searchKeyword.value = ''
+  
+  // 更新历史记录
+  window.history.replaceState(
+    { directoryId: 0, directoryName: '根目录' }, 
+    '', 
+    window.location.pathname
+  )
 }
 
 // 加载文件列表
 const loadFiles = async () => {
   loading.value = true
   emit('update:loading', true)
-  
+
   try {
     let response: any
-    
+
     if (isSearching.value && searchKeyword.value) {
       // 搜索文件
       response = await fileApi.searchFiles(searchKeyword.value, currentPage.value, pageSize.value)
@@ -303,10 +315,10 @@ const customUpload = async (options: UploadRequestOptions) => {
   try {
     loading.value = true
     emit('update:loading', true)
-    
+
     const file = options.file as File
     const isPublic = false // 默认上传为私有文件
-    
+
     const response = await fileApi.uploadFile(file, currentDirectory.value.id, isPublic)
     console.log(response)
     ElMessage.success('文件上传成功')
@@ -328,10 +340,10 @@ const handleDownload = async (file: any) => {
       navigateToFolder(file)
       return
     }
-    
+
     loading.value = true
     emit('update:loading', true)
-    
+
     const response = await fileApi.getFileDownloadUrl(file.id) as any
     console.log(response)
     if (response && response.downloadUrl) {
@@ -342,7 +354,7 @@ const handleDownload = async (file: any) => {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      
+
       ElMessage.success('文件下载开始')
     } else {
       ElMessage.error('获取下载链接失败')
@@ -358,6 +370,13 @@ const handleDownload = async (file: any) => {
 
 // 导航到文件夹
 const navigateToFolder = (folder: any) => {
+  // 保存当前状态到历史记录
+  window.history.pushState(
+    { directoryId: folder.id, directoryName: folder.filename }, 
+    '', 
+    window.location.pathname
+  )
+  
   currentDirectory.value = { id: folder.id, name: folder.filename }
   currentPage.value = 1
   loadFiles()
@@ -368,33 +387,43 @@ const navigateToParent = async () => {
   if (currentDirectory.value.id === 0) {
     return
   }
-  
+
   try {
     loading.value = true
     emit('update:loading', true)
-    
+
     // 获取当前文件夹信息
-    const response = await fileApi.getFileInfo(currentDirectory.value.id)
-    
-    if (response && response.data && response.data.file) {
-      const parentId = response.data.file.parentId || 0
-      
-      if (parentId === 0) {
-        currentDirectory.value = { id: 0, name: '根目录' }
-      } else {
+    const response = await fileApi.getFileInfo(currentDirectory.value.id) as any
+
+    if (response && response.file) {
+      const parentId = response.file.parentId || 0
+      let parentName = '根目录'
+
+      if (parentId !== 0) {
         // 获取父文件夹信息
-        const parentResponse = await fileApi.getFileInfo(parentId)
-        if (parentResponse && parentResponse.data && parentResponse.data.file) {
-          currentDirectory.value = { id: parentId, name: parentResponse.data.file.filename }
-        } else {
-          currentDirectory.value = { id: 0, name: '根目录' }
-          ElMessage.warning('获取父文件夹信息失败，已返回根目录')
+        const parentResponse = await fileApi.getFileInfo(parentId) as any
+        if (parentResponse && parentResponse.file) {
+          parentName = parentResponse.file.filename
         }
       }
       
+      // 更新历史记录
+      window.history.pushState(
+        { directoryId: parentId, directoryName: parentName }, 
+        '', 
+        window.location.pathname
+      )
+
+      currentDirectory.value = { id: parentId, name: parentName }
       currentPage.value = 1
       loadFiles()
     } else {
+      window.history.pushState(
+        { directoryId: 0, directoryName: '根目录' }, 
+        '', 
+        window.location.pathname
+      )
+      
       currentDirectory.value = { id: 0, name: '根目录' }
       currentPage.value = 1
       loadFiles()
@@ -403,6 +432,13 @@ const navigateToParent = async () => {
   } catch (error) {
     console.error('导航失败:', error)
     ElMessage.error('导航失败，已返回根目录')
+    
+    window.history.pushState(
+      { directoryId: 0, directoryName: '根目录' }, 
+      '', 
+      window.location.pathname
+    )
+    
     currentDirectory.value = { id: 0, name: '根目录' }
     currentPage.value = 1
     loadFiles()
@@ -428,13 +464,13 @@ const createNewFolder = async () => {
         return true
       }
     })
-    
+
     if (folderName) {
       loading.value = true
       emit('update:loading', true)
-      
+
       const response = await fileApi.createFolder(folderName, currentDirectory.value.id)
-      
+
       if (response && response.data) {
         ElMessage.success('文件夹创建成功')
         loadFiles()
@@ -461,10 +497,10 @@ const handleDelete = async (file: any) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     loading.value = true
     emit('update:loading', true)
-    
+
     await fileApi.deleteFile(file.id)
     ElMessage.success(`${file.isDir ? '文件夹' : '文件'}删除成功`)
     loadFiles() // 重新加载文件列表
@@ -479,24 +515,31 @@ const handleDelete = async (file: any) => {
   }
 }
 
-// 处理文件公开/私有状态切换
+// 处理切换文件公开状态
 const handleTogglePublic = async (file: any) => {
   try {
-    const newStatus = file.visibility === 'public' ? false : true
-    const statusText = newStatus ? '公开' : '私有'
-    
     loading.value = true
-    emit('update:loading', true)
     
-    await fileApi.updateFilePublicStatus(file.id, newStatus)
-    ElMessage.success(`文件已设为${statusText}`)
-    loadFiles() // 重新加载文件列表
+    const isPublic = file.visibility !== 'public'
+    let response
+    
+    if (file.isDir) {
+      // 如果是文件夹，调用文件夹公开状态更新API
+      response = await fileApi.updateFolderPublicStatus(file.id, isPublic)
+      ElMessage.success('文件夹及其子文件公开状态已更新')
+    } else {
+      // 如果是文件，调用文件公开状态更新API
+      response = await fileApi.updateFilePublicStatus(file.id, isPublic)
+      ElMessage.success('文件公开状态已更新')
+    }
+    
+    // 更新本地状态
+    file.visibility = isPublic ? 'public' : 'private'
   } catch (error) {
-    console.error('更新文件状态失败:', error)
-    ElMessage.error('更新文件状态失败，请稍后重试')
+    console.error('更新公开状态失败', error)
+    ElMessage.error('更新公开状态失败')
   } finally {
     loading.value = false
-    emit('update:loading', false)
   }
 }
 
@@ -553,24 +596,24 @@ const triggerFolderUpload = () => {
 const handleFolderUpload = async (event: Event) => {
   const input = event.target as HTMLInputElement
   if (!input.files || input.files.length === 0) return
-  
+
   loading.value = true
   emit('update:loading', true)
-  
+
   try {
     const files = Array.from(input.files)
     const relativePaths: string[] = []
-    
+
     // 获取所有文件的相对路径
     for (const file of files) {
       // 在Chrome中，webkitRelativePath属性包含文件的相对路径
       const path = (file as any).webkitRelativePath
       relativePaths.push(path)
     }
-    
+
     // 调用上传API
     const response = await fileApi.uploadFolder(files, relativePaths, currentDirectory.value.id, false)
-    
+
     ElMessage.success('文件夹上传成功')
     loadFiles() // 重新加载文件列表
   } catch (error: any) {
@@ -747,4 +790,4 @@ defineExpose({
 .visibility-btn {
   min-width: 90px;
 }
-</style> 
+</style>

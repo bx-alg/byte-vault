@@ -33,10 +33,10 @@ public class FileController {
             @RequestParam(value = "parentId", required = false, defaultValue = "0") Long parentId,
             @RequestParam(value = "isPublic", defaultValue = "false") boolean isPublic,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         try {
             FileInfo fileInfo = fileService.uploadFile(file, userDetails.getId(), parentId, isPublic);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("message", "文件上传成功");
             response.put("fileId", fileInfo.getId());
@@ -44,7 +44,7 @@ public class FileController {
             response.put("fileSize", fileInfo.getFileSize());
             response.put("fileType", fileInfo.getFileType());
             response.put("isPublic", "public".equals(fileInfo.getVisibility()));
-            
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
@@ -63,14 +63,15 @@ public class FileController {
             @RequestParam(value = "parentId", required = false, defaultValue = "0") Long parentId,
             @RequestParam(value = "isPublic", defaultValue = "false") boolean isPublic,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         try {
-            List<FileInfo> uploadedFiles = fileService.uploadFolder(files, relativePaths, userDetails.getId(), parentId, isPublic);
-            
+            List<FileInfo> uploadedFiles = fileService.uploadFolder(files, relativePaths, userDetails.getId(), parentId,
+                    isPublic);
+
             Map<String, Object> response = new HashMap<>();
             response.put("message", "文件夹上传成功");
             response.put("fileCount", uploadedFiles.size());
-            
+
             List<Map<String, Object>> fileInfoList = new ArrayList<>();
             for (FileInfo fileInfo : uploadedFiles) {
                 Map<String, Object> fileInfoMap = new HashMap<>();
@@ -81,7 +82,7 @@ public class FileController {
                 fileInfoList.add(fileInfoMap);
             }
             response.put("files", fileInfoList);
-            
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
@@ -97,9 +98,9 @@ public class FileController {
     public ResponseEntity<Map<String, Object>> deleteFile(
             @PathVariable Long fileId,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         boolean success = fileService.deleteFile(fileId, userDetails.getId());
-        
+
         Map<String, Object> response = new HashMap<>();
         if (success) {
             response.put("message", "文件删除成功");
@@ -117,9 +118,9 @@ public class FileController {
     public ResponseEntity<Map<String, Object>> getFileDownloadUrl(
             @PathVariable Long fileId,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         String downloadUrl = fileService.getFileDownloadUrl(fileId, userDetails.getId());
-        
+
         Map<String, Object> response = new HashMap<>();
         if (downloadUrl != null) {
             response.put("message", "获取下载链接成功");
@@ -139,9 +140,9 @@ public class FileController {
             @PathVariable Long fileId,
             @RequestParam boolean isPublic,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         boolean success = fileService.updateFilePublicStatus(fileId, userDetails.getId(), isPublic);
-        
+
         Map<String, Object> response = new HashMap<>();
         if (success) {
             response.put("message", "文件公开状态更新成功");
@@ -161,9 +162,9 @@ public class FileController {
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         IPage<FileInfo> files = fileService.getUserFiles(userDetails.getId(), parentId, page, size);
-        
+
         Map<String, Object> response = new HashMap<>();
         response.put("message", "获取文件列表成功");
         response.put("files", files.getRecords());
@@ -171,7 +172,7 @@ public class FileController {
         response.put("pages", files.getPages());
         response.put("current", files.getCurrent());
         response.put("size", files.getSize());
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -182,9 +183,9 @@ public class FileController {
     public ResponseEntity<Map<String, Object>> getPublicFiles(
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
-        
+
         IPage<FileInfo> files = fileService.getPublicFiles(page, size);
-        
+
         Map<String, Object> response = new HashMap<>();
         response.put("message", "获取公开文件列表成功");
         response.put("files", files.getRecords());
@@ -192,7 +193,7 @@ public class FileController {
         response.put("pages", files.getPages());
         response.put("current", files.getCurrent());
         response.put("size", files.getSize());
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -205,9 +206,9 @@ public class FileController {
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         IPage<FileInfo> files = fileService.searchFiles(userDetails.getId(), keyword, page, size);
-        
+
         Map<String, Object> response = new HashMap<>();
         response.put("message", "搜索文件成功");
         response.put("files", files.getRecords());
@@ -215,7 +216,7 @@ public class FileController {
         response.put("pages", files.getPages());
         response.put("current", files.getCurrent());
         response.put("size", files.getSize());
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -226,9 +227,9 @@ public class FileController {
     public ResponseEntity<Map<String, Object>> getFileInfo(
             @PathVariable Long fileId,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         FileInfo fileInfo = fileService.getFileInfo(fileId);
-        
+
         Map<String, Object> response = new HashMap<>();
         if (fileInfo != null) {
             // 检查权限
@@ -238,7 +239,7 @@ public class FileController {
                     String downloadUrl = fileService.getFileDownloadUrl(fileId, userDetails.getId());
                     fileInfo.setDownloadUrl(downloadUrl);
                 }
-                
+
                 response.put("message", "获取文件详情成功");
                 response.put("file", fileInfo);
                 return ResponseEntity.ok(response);
@@ -251,7 +252,7 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
         }
     }
-    
+
     /**
      * 创建文件夹
      */
@@ -260,15 +261,15 @@ public class FileController {
             @RequestParam String folderName,
             @RequestParam(value = "parentId", required = false, defaultValue = "0") Long parentId,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
-        
+
         try {
             FileInfo folder = fileService.createFolder(userDetails.getId(), parentId, folderName);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("message", "文件夹创建成功");
             response.put("folderId", folder.getId());
             response.put("folderName", folder.getFilename());
-            
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
@@ -276,4 +277,25 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }
-} 
+
+    /**
+     * 更新文件夹公开状态（包括所有子文件）
+     */
+    @PutMapping("/{folderId}/folder-public")
+    public ResponseEntity<Map<String, Object>> updateFolderPublicStatus(
+            @PathVariable Long folderId,
+            @RequestParam boolean isPublic,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+
+        boolean success = fileService.updateFolderPublicStatus(folderId, userDetails.getId(), isPublic);
+
+        Map<String, Object> response = new HashMap<>();
+        if (success) {
+            response.put("message", "文件夹及其子文件公开状态更新成功");
+            return ResponseEntity.ok(response);
+        } else {
+            response.put("message", "文件夹公开状态更新失败");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+}

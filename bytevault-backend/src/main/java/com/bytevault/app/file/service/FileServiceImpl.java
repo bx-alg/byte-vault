@@ -467,4 +467,59 @@ public class FileServiceImpl implements FileService {
             throw new RuntimeException("创建文件夹失败", e);
         }
     }
+
+    @Override
+    @Transactional
+    public boolean updateFolderPublicStatus(Long folderId, Long userId, boolean isPublic) {
+        try {
+            // 查询文件夹信息
+            FileInfo folder = fileMapper.selectById(folderId);
+            if (folder == null) {
+                log.warn("文件夹不存在: {}", folderId);
+                return false;
+            }
+            
+            // 检查权限
+            if (!folder.getUserId().equals(userId)) {
+                log.warn("无权限更新文件夹: {}, 用户ID: {}", folderId, userId);
+                return false;
+            }
+            
+            // 检查是否是文件夹
+            if (!folder.getIsDir()) {
+                log.warn("不是文件夹: {}", folderId);
+                return false;
+            }
+            
+            // 更新当前文件夹的公开状态
+            boolean currentFolderUpdated = updateFilePublicStatus(folderId, userId, isPublic);
+            if (!currentFolderUpdated) {
+                return false;
+            }
+            
+            // 查询所有子文件和子文件夹
+            LambdaQueryWrapper<FileInfo> queryWrapper = new LambdaQueryWrapper<>();
+            queryWrapper.eq(FileInfo::getParentId, folderId)
+                       .eq(FileInfo::getUserId, userId)
+                       .eq(FileInfo::getDeleted, false);
+            List<FileInfo> childFiles = fileMapper.selectList(queryWrapper);
+            
+            // 递归更新所有子文件和子文件夹
+            for (FileInfo childFile : childFiles) {
+                if (childFile.getIsDir()) {
+                    // 递归处理子文件夹
+                    updateFolderPublicStatus(childFile.getId(), userId, isPublic);
+                } else {
+                    // 更新子文件的公开状态
+                    updateFilePublicStatus(childFile.getId(), userId, isPublic);
+                }
+            }
+            
+            log.info("文件夹及其子文件公开状态更新成功: {}, 用户ID: {}, 公开状态: {}", folderId, userId, isPublic);
+            return true;
+        } catch (Exception e) {
+            log.error("更新文件夹公开状态失败: {}", e.getMessage(), e);
+            return false;
+        }
+    }
 }

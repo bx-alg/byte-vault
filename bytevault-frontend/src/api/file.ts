@@ -178,6 +178,22 @@ export function createFolder(folderName: string, parentId: number = 0) {
 }
 
 /**
+ * 更新文件夹公开状态（包括所有子文件）
+ * @param folderId 文件夹ID
+ * @param isPublic 是否公开
+ * @returns 更新结果
+ */
+export function updateFolderPublicStatus(folderId: number, isPublic: boolean) {
+  return request({
+    url: `/api/files/${folderId}/folder-public`,
+    method: 'put',
+    params: {
+      isPublic
+    }
+  })
+}
+
+/**
  * 导出所有API
  * @returns 所有API对象
  */
@@ -190,6 +206,7 @@ export const fileApi = {
   getFileDownloadUrl,
   deleteFile,
   updateFilePublicStatus,
+  updateFolderPublicStatus,
   searchFiles,
   getFileInfo
 } 

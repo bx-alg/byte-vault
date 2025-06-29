@@ -100,4 +100,13 @@ public interface FileService {
      * @return 文件夹信息
      */
     FileInfo createFolder(Long userId, Long parentId, String folderName);
+    
+    /**
+     * 更新文件夹及其所有子文件的公开状态
+     * @param folderId 文件夹ID
+     * @param userId 用户ID
+     * @param isPublic 是否公开
+     * @return 是否更新成功
+     */
+    boolean updateFolderPublicStatus(Long folderId, Long userId, boolean isPublic);
 } 
