@@ -3,7 +3,7 @@
     <!-- 页面标题 -->
     <div class="page-header">
       <div class="title-container">
-        <img src="@/assets/cute.jpeg" class="title-decoration floating" alt="装饰" />
+        <img src="@/assets/cute.jpeg" class="title-decoration" alt="装饰" />
         <h1 class="main-title">ByteVault <span class="subtitle">文件管理系统</span></h1>
       </div>
       
@@ -71,8 +71,15 @@ const fileExplorer = ref<InstanceType<typeof FileExplorer> | null>(null)
 const handleTabChange = () => {
   // 重置文件浏览器状态
   if (fileExplorer.value) {
+    // 先清空数据
     fileExplorer.value.resetState()
-    fileExplorer.value.loadFiles()
+    
+    // 延时执行加载，确保DOM更新后再加载数据
+    setTimeout(() => {
+      if (fileExplorer.value) {
+        fileExplorer.value.loadFiles()
+      }
+    }, 50)
   }
 }
 
@@ -86,7 +93,7 @@ onMounted(() => {
 
 <style scoped>
 .home-container {
-  padding: 20px;
+  padding: 15px;
   max-width: 1200px;
   margin: 0 auto;
   position: relative;
@@ -96,8 +103,9 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  position: relative;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
 }
 
 .title-container {
@@ -107,28 +115,29 @@ onMounted(() => {
 }
 
 .title-decoration {
-  width: 60px;
-  position: absolute;
-  left: -30px;
-  top: -20px;
-  z-index: 1;
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 50%;
+  margin-right: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .main-title {
-  font-size: 2.5rem;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--primary-color);
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
   margin: 0;
-  position: relative;
-  z-index: 2;
+  white-space: nowrap;
 }
 
 .subtitle {
-  font-size: 1.2rem;
+  font-size: 1rem;
   color: var(--secondary-color);
   margin-left: 10px;
   font-weight: normal;
+  white-space: nowrap;
 }
 
 .user-greeting {
@@ -138,17 +147,18 @@ onMounted(() => {
 }
 
 .greeting-text {
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: var(--text-color);
+  white-space: nowrap;
 }
 
 .tabs-container {
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
 .custom-tabs :deep(.el-tabs__item) {
-  font-size: 1.1rem;
-  padding: 0 20px;
+  font-size: 1rem;
+  padding: 0 15px;
 }
 
 .custom-tabs :deep(.el-tabs__active-bar) {
@@ -161,6 +171,33 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 5px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .user-greeting {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-title {
+    font-size: 1.5rem;
+  }
+  
+  .subtitle {
+    font-size: 0.9rem;
+  }
+  
+  .custom-tabs :deep(.el-tabs__item) {
+    padding: 0 10px;
+    font-size: 0.9rem;
+  }
 }
 
 .footer-decoration {

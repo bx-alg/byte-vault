@@ -124,7 +124,7 @@ export function getPublicFiles(page: number = 1, pageSize: number = 10) {
     method: 'get',
     params: {
       page,
-      pageSize
+      size: pageSize
     }
   })
 }
@@ -143,7 +143,7 @@ export function searchFiles(keyword: string, page: number = 1, pageSize: number 
     params: {
       keyword,
       page,
-      pageSize
+      size: pageSize
     }
   })
 }

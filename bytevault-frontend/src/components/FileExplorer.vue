@@ -19,45 +19,41 @@
       </div>
 
       <div class="right-actions">
-        <el-input v-model="searchKeyword" placeholder="搜索文件" class="search-input" @keyup.enter="handleSearch">
-          <template #append>
-            <el-button @click="handleSearch">
+        <div class="search-and-buttons">
+          <el-input v-model="searchKeyword" placeholder="搜索文件" class="search-input" @keyup.enter="handleSearch">
+            <template #append>
+              <el-button @click="handleSearch">
+                <el-icon>
+                  <Search />
+                </el-icon>
+              </el-button>
+            </template>
+          </el-input>
+
+          <div class="buttons-group">
+
+            <el-upload v-if="showUpload" class="upload-button" :show-file-list="false" :http-request="customUpload"
+              :multiple="false">
+              <el-button type="primary" class="action-button wiggle">
+                <el-icon>
+                  <Upload />
+                </el-icon>
+                上传文件
+              </el-button>
+            </el-upload>
+
+            <el-button v-if="showUpload" type="warning" @click="triggerFolderUpload" class="action-button wiggle">
               <el-icon>
-                <Search />
+                <FolderAdd />
               </el-icon>
+              上传文件夹
             </el-button>
-          </template>
-        </el-input>
-
-        <div class="buttons-container">
-          <el-button v-if="showCreateFolder" type="success" @click="createNewFolder" class="action-button wiggle">
-            <el-icon>
-              <Folder />
-            </el-icon>
-            新建文件夹
-          </el-button>
-
-          <el-upload v-if="showUpload" class="upload-button" :show-file-list="false" :http-request="customUpload"
-            :multiple="false">
-            <el-button type="primary" class="action-button wiggle">
-              <el-icon>
-                <Upload />
-              </el-icon>
-              上传文件
-            </el-button>
-          </el-upload>
-
-          <el-button v-if="showUpload" type="warning" @click="triggerFolderUpload" class="action-button wiggle">
-            <el-icon>
-              <FolderAdd />
-            </el-icon>
-            上传文件夹
-          </el-button>
-
-          <!-- 隐藏的文件夹上传输入 -->
-          <input ref="folderInput" type="file" @change="handleFolderUpload" webkitdirectory directory multiple
-            style="display: none" />
+          </div>
         </div>
+
+        <!-- 隐藏的文件夹上传输入 -->
+        <input ref="folderInput" type="file" @change="handleFolderUpload" webkitdirectory directory multiple
+          style="display: none" />
       </div>
     </div>
 
@@ -65,14 +61,18 @@
     <el-card class="file-list-card">
       <template #header>
         <div class="card-header">
-          <span class="card-title">{{ title }}</span>
-          <span v-if="isSearching" class="search-result-text">搜索结果: {{ searchKeyword }}</span>
-          <span v-if="currentDirectory.id !== 0" class="directory-path">
-            当前目录: {{ currentDirectory.name }}
-            <el-button size="small" @click="navigateToParent" type="text" class="wiggle">
-              返回上级
-            </el-button>
-          </span>
+          <div class="header-left">
+            <span class="card-title">{{ title }}</span>
+            <span v-if="isSearching" class="search-result-text">搜索结果: {{ searchKeyword }}</span>
+          </div>
+          <div class="header-right" v-if="currentDirectory.id !== 0">
+            <span class="directory-path">
+              当前目录: {{ currentDirectory.name }}
+              <el-button size="small" @click="navigateToParent" type="text" class="wiggle">
+                返回上级
+              </el-button>
+            </span>
+          </div>
         </div>
       </template>
 
@@ -103,21 +103,21 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="大小" prop="fileSize" width="120">
+        <el-table-column label="大小" prop="fileSize" width="100">
           <template #default="scope">
             {{ scope.row.isDir ? '-' : formatFileSize(scope.row.fileSize) }}
           </template>
         </el-table-column>
 
-        <el-table-column label="所有者" prop="ownerName" width="120" />
+        <el-table-column label="所有者" prop="ownerName" width="100" />
 
-        <el-table-column label="上传时间" prop="createTime" width="180">
+        <el-table-column label="上传时间" prop="createTime" width="160">
           <template #default="scope">
             {{ formatDate(scope.row.createTime) }}
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" prop="visibility" width="100">
+        <el-table-column label="状态" prop="visibility" width="80">
           <template #default="scope">
             <el-tag :type="scope.row.visibility === 'public' ? 'success' : 'info'" class="status-tag">
               {{ scope.row.visibility === 'public' ? '公开' : '私有' }}
@@ -125,39 +125,35 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="scope">
             <div class="file-operations">
-              <div class="operation-row">
-                <el-button 
-                  size="small" 
-                  @click="handleDownload(scope.row)"
-                  v-if="!scope.row.isDir"
-                  class="action-btn wiggle"
-                >
-                  下载
-                </el-button>
-                <el-button 
-                  v-if="scope.row.userId === userStore.userInfo?.id"
-                  size="small" 
-                  type="danger" 
-                  @click="handleDelete(scope.row)"
-                  class="action-btn wiggle"
-                >
-                  删除
-                </el-button>
-              </div>
-              
-              <div class="operation-row" v-if="scope.row.userId === userStore.userInfo?.id">
-                <el-button
-                  size="small"
-                  type="info"
-                  @click="handleTogglePublic(scope.row)"
-                  class="action-btn wiggle visibility-btn"
-                >
-                  {{ scope.row.visibility === 'public' ? '设为私有' : '设为公开' }}
-                </el-button>
-              </div>
+              <el-button 
+                size="small" 
+                @click="handleDownload(scope.row)"
+                v-if="!scope.row.isDir"
+                class="action-btn wiggle"
+              >
+                下载
+              </el-button>
+              <el-button 
+                v-if="scope.row.userId === userStore.userInfo?.id"
+                size="small" 
+                type="danger" 
+                @click="handleDelete(scope.row)"
+                class="action-btn wiggle"
+              >
+                删除
+              </el-button>
+              <el-button
+                v-if="scope.row.userId === userStore.userInfo?.id"
+                size="small"
+                type="info"
+                @click="handleTogglePublic(scope.row)"
+                class="action-btn wiggle visibility-btn"
+              >
+                {{ scope.row.visibility === 'public' ? '设为私有' : '设为公开' }}
+              </el-button>
             </div>
           </template>
         </el-table-column>
@@ -252,9 +248,14 @@ onBeforeUnmount(() => {
 })
 
 // 监听类型变化，重置状态并加载文件
-watch(() => props.type, () => {
+watch(() => props.type, (newType) => {
+  console.log('文件浏览器类型改变:', newType)
   resetState()
-  loadFiles()
+  
+  // 延时加载文件列表，确保DOM更新完成
+  setTimeout(() => {
+    loadFiles()
+  }, 50)
 })
 
 // 重置状态
@@ -274,6 +275,9 @@ const resetState = () => {
 
 // 加载文件列表
 const loadFiles = async () => {
+  // 强制清空当前文件列表，确保UI立即更新
+  fileList.value = []
+  
   loading.value = true
   emit('update:loading', true)
 
@@ -290,7 +294,7 @@ const loadFiles = async () => {
       // 加载公共文件
       response = await fileApi.getPublicFiles(currentPage.value, pageSize.value)
     }
-    console.log(response)
+    console.log('加载文件响应:', response)
     if (response) {
       fileList.value = response.files || []
       total.value = response.total || 0
@@ -647,27 +651,42 @@ defineExpose({
 .file-actions {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.left-actions {
+  display: flex;
+  align-items: center;
+}
+
+.right-actions {
+  display: flex;
+  align-items: center;
+}
+
+.search-and-buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .search-input {
-  width: 250px;
-  margin-right: 15px;
+  width: 220px;
 }
 
-.buttons-container {
+.buttons-group {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .action-button {
-  margin-left: 10px;
+  white-space: nowrap;
 }
-
-/* 删除上传按钮容器样式 */
 
 .file-list-card {
   margin-bottom: 20px;
@@ -678,12 +697,21 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.header-left, .header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .card-title {
   font-weight: bold;
   font-size: 1.2em;
   color: var(--primary-color);
+  white-space: nowrap;
 }
 
 .file-name-cell {
@@ -714,6 +742,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .clickable-breadcrumb {
@@ -728,7 +757,7 @@ defineExpose({
 }
 
 .pagination-container {
-  margin-top: 20px;
+  margin-top: 15px;
   display: flex;
   justify-content: flex-end;
 }
@@ -738,12 +767,12 @@ defineExpose({
 }
 
 .empty-files {
-  padding: 40px 0;
+  padding: 30px 0;
 }
 
 .empty-image {
-  width: 200px;
-  margin-bottom: 20px;
+  width: 150px;
+  margin-bottom: 15px;
 }
 
 .cute-loading-container {
@@ -751,43 +780,65 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 50px 0;
+  padding: 30px 0;
 }
 
 .loading-text {
-  margin-top: 20px;
+  margin-top: 15px;
   color: var(--primary-color);
   font-weight: bold;
-  font-size: 1.2em;
+  font-size: 1.1em;
 }
 
 .search-result-text {
   background-color: rgba(255, 105, 180, 0.15);
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: 20px;
   color: var(--primary-color);
   font-weight: bold;
+  font-size: 0.9em;
+}
+
+.file-operations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-start;
 }
 
 .action-btn {
-  margin: 0 3px;
-}
-
-/* 文件操作按钮布局 */
-.file-operations {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.operation-row {
-  display: flex;
-  justify-content: center;
-  gap: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 .visibility-btn {
-  min-width: 90px;
+  min-width: 80px;
+}
+
+@media (max-width: 768px) {
+  .file-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .right-actions {
+    width: 100%;
+  }
+  
+  .search-and-buttons {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+  
+  .buttons-group {
+    margin-top: 10px;
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>

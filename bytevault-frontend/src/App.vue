@@ -155,6 +155,8 @@ html, body {
 .app-container {
   height: 100vh;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 背景图片叠加层 */
@@ -165,7 +167,7 @@ html, body {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(255, 255, 255, 0.5); /* 将透明度从0.8降低到0.5 */
+  background-color: rgba(255, 255, 255, 0.65); /* 调整透明度 */
   z-index: 0;
   pointer-events: none;
 }
@@ -177,6 +179,8 @@ html, body {
   position: relative;
   z-index: 100;
   background-color: rgba(255, 255, 255, 0.95);
+  height: auto !important;
+  min-height: 60px;
 }
 
 .header-content {
@@ -184,6 +188,7 @@ html, body {
   align-items: center;
   height: 100%;
   padding: 0 20px;
+  flex-wrap: wrap;
 }
 
 .logo {
@@ -191,6 +196,7 @@ html, body {
   font-weight: bold;
   color: #409EFF;
   margin-right: 20px;
+  white-space: nowrap;
 }
 
 .user-actions {
@@ -205,23 +211,24 @@ html, body {
 
 .username {
   margin-left: 8px;
+  white-space: nowrap;
 }
 
 /* 主要内容区样式 */
 .el-main {
-  padding: 20px;
-  height: calc(100vh - 120px);
-  overflow-y: auto;
+  padding: 15px;
   position: relative;
   z-index: 1;
-  background-color: rgba(255, 255, 255, 0.4); /* 将透明度从0.7降低到0.4 */
+  background-color: rgba(255, 255, 255, 0.55); /* 调整透明度 */
+  flex: 1;
+  overflow-y: auto;
 }
 
 /* 页脚样式 */
 .el-footer {
   background-color: rgba(245, 247, 250, 0.9);
   padding: 0;
-  height: 60px;
+  height: 50px !important;
   position: relative;
   z-index: 100;
 }
@@ -243,5 +250,28 @@ html, body {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .header-content {
+    padding: 10px;
+    justify-content: space-between;
+  }
+
+  .el-menu.el-menu--horizontal {
+    padding: 0;
+    border: none;
+  }
+
+  .el-menu--horizontal > .el-menu-item {
+    height: 50px;
+    line-height: 50px;
+    padding: 0 10px;
+  }
+  
+  .el-main {
+    padding: 10px;
+  }
 }
 </style> 

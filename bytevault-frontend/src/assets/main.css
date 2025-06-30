@@ -11,15 +11,15 @@
   --secondary-color: #9370DB; /* 紫色 */
   --accent-color: #00BFFF;   /* 天蓝色 */
   --background-color: #FFF0F5; /* 淡粉色背景 */
-  --card-bg-color: rgba(255, 255, 255, 0.9);
+  --card-bg-color: rgba(255, 255, 255, 0.92);
   --text-color: #5D4037;
   --light-text: #8D6E63;
   --success-color: #66BB6A;
   --warning-color: #FFCA28;
   --danger-color: #EF5350;
   --info-color: #29B6F6;
-  --border-radius: 12px;
-  --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --border-radius: 10px;
+  --box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
   --transition: all 0.3s ease;
 }
 
@@ -48,7 +48,7 @@ body::before {
 
 #app {
   min-height: 100vh;
-  padding: 20px;
+  padding: 10px;
 }
 
 /* 卡片样式 */
@@ -61,17 +61,18 @@ body::before {
   backdrop-filter: blur(10px);
   box-shadow: var(--box-shadow) !important;
   border: 1px solid rgba(255, 105, 180, 0.2) !important;
+  margin-bottom: 15px;
 }
 
 .el-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
 }
 
 .el-card__header {
   background-color: rgba(255, 105, 180, 0.15);
   border-bottom: 2px dotted var(--primary-color) !important;
-  padding: 15px 20px !important;
+  padding: 12px 15px !important;
 }
 
 /* 按钮样式 */
@@ -80,6 +81,11 @@ body::before {
   font-weight: 600 !important;
   letter-spacing: 0.5px;
   transition: var(--transition) !important;
+  padding: 8px 15px !important;
+}
+
+.el-button--small {
+  padding: 6px 12px !important;
 }
 
 .el-button--primary {
@@ -103,8 +109,8 @@ body::before {
 }
 
 .el-button:hover {
-  transform: scale(1.05);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  transform: scale(1.03);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
 }
 
 /* 输入框样式 */
@@ -130,10 +136,15 @@ body::before {
   background-color: rgba(147, 112, 219, 0.2) !important;
   color: var(--text-color) !important;
   font-weight: 600 !important;
+  padding: 8px !important;
+}
+
+.el-table td {
+  padding: 6px 8px !important;
 }
 
 .el-table tr {
-  background-color: rgba(255, 255, 255, 0.8) !important;
+  background-color: rgba(255, 255, 255, 0.85) !important;
   transition: var(--transition);
 }
 
@@ -151,7 +162,7 @@ body::before {
 
 /* 分页样式 */
 .el-pagination {
-  margin-top: 20px !important;
+  margin-top: 15px !important;
   text-align: center !important;
 }
 
@@ -159,6 +170,7 @@ body::before {
   border-radius: 50% !important;
   font-weight: 600 !important;
   transition: var(--transition);
+  margin: 0 3px !important;
 }
 
 .el-pagination .el-pager li.active {
@@ -172,7 +184,7 @@ body::before {
     transform: translateY(0px);
   }
   50% {
-    transform: translateY(-10px);
+    transform: translateY(-8px);
   }
   100% {
     transform: translateY(0px);
@@ -180,22 +192,22 @@ body::before {
 }
 
 .floating {
-  animation: float 5s ease-in-out infinite;
+  animation: float 4s ease-in-out infinite;
 }
 
 /* 可爱的加载动画 */
 .cute-loading {
   position: relative;
-  width: 80px;
-  height: 80px;
-  margin: 30px auto;
+  width: 60px;
+  height: 60px;
+  margin: 20px auto;
 }
 
 .cute-loading:before {
   content: '';
   position: absolute;
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: var(--primary-color);
   animation: pulse 1.5s ease-in-out infinite;
@@ -214,8 +226,8 @@ body::before {
 
 /* 自定义滚动条 */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -234,8 +246,8 @@ body::before {
 
 /* 文件图标样式 */
 .file-icon {
-  font-size: 24px;
-  margin-right: 10px;
+  font-size: 20px;
+  margin-right: 8px;
   color: var(--primary-color);
 }
 
@@ -248,39 +260,38 @@ body::before {
   position: relative;
   overflow: hidden;
   border-radius: 50%;
-  border: 3px solid var(--primary-color);
-  transition: var(--transition);
 }
 
 .avatar-container:hover {
   transform: scale(1.05);
-  border-color: var(--secondary-color);
+  box-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
 }
 
-/* 特殊动画类 */
+/* 交互动效 */
+.wiggle {
+  transition: all 0.2s ease;
+}
+
 .wiggle:hover {
-  animation: wiggle 0.5s ease-in-out;
+  transform: translateY(-2px) rotate(-1deg);
 }
 
 @keyframes wiggle {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(5deg); }
-  75% { transform: rotate(-5deg); }
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(1deg); }
+  75% { transform: rotate(-1deg); }
+  100% { transform: rotate(0deg); }
 }
 
-/* 面包屑样式 */
+/* 通用布局辅助类 */
 .el-breadcrumb {
-  background-color: rgba(255, 255, 255, 0.7);
-  padding: 10px 15px;
-  border-radius: var(--border-radius);
   margin-bottom: 15px;
 }
 
 .container {
-  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 15px;
 }
 
 .text-center {
@@ -308,4 +319,27 @@ body::before {
 .px-4 {
   padding-left: 1rem;
   padding-right: 1rem;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .el-button {
+    padding: 7px 12px !important;
+  }
+  
+  .el-button--small {
+    padding: 5px 10px !important;
+  }
+  
+  .el-table th, .el-table td {
+    padding: 5px !important;
+  }
+  
+  .el-pagination button, .el-pagination span {
+    margin: 0 2px !important;
+  }
+  
+  .floating {
+    animation: none; /* 在移动设备上禁用浮动动画以提高性能 */
+  }
 } 

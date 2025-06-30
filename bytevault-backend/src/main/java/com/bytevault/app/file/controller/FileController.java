@@ -93,6 +93,7 @@ public class FileController {
 
     /**
      * 删除文件
+     * 如果是文件夹，会递归删除所有子文件和子文件夹
      */
     @DeleteMapping("/{fileId}")
     public ResponseEntity<Map<String, Object>> deleteFile(

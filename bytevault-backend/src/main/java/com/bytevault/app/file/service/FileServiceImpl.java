@@ -218,9 +218,21 @@ public class FileServiceImpl implements FileService {
                 return false;
             }
             
-            // 如果是文件，从MinIO中删除
-            if (!fileInfo.getIsDir()) {
-                // 构建MinIO对象名称
+            // 如果是目录，递归删除子文件和子文件夹
+            if (fileInfo.getIsDir()) {
+                // 查询所有子文件和子文件夹
+                LambdaQueryWrapper<FileInfo> queryWrapper = new LambdaQueryWrapper<>();
+                queryWrapper.eq(FileInfo::getParentId, fileId)
+                           .eq(FileInfo::getUserId, userId)
+                           .eq(FileInfo::getDeleted, false);
+                List<FileInfo> childFiles = fileMapper.selectList(queryWrapper);
+                
+                // 递归删除所有子文件和子文件夹
+                for (FileInfo childFile : childFiles) {
+                    deleteFile(childFile.getId(), userId);
+                }
+            } else {
+                // 如果是文件，从MinIO中删除
                 String minioObjectName = userId + "/" + fileInfo.getFilename();
                 minioClient.removeObject(
                         RemoveObjectArgs.builder()
