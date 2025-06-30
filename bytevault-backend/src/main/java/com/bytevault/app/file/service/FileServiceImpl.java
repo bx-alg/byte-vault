@@ -27,15 +27,12 @@ public class FileServiceImpl implements FileService {
     private final FileMapper fileMapper;
     private final UserMapper userMapper;
 
-    @Value("${minio.userFilesBucket}")
+    @Value("${minio.userFilesBucketName}")
     private String userFilesBucket;
 
     @Value("${minio.endpoint}")
     private String endpoint;
     
-    @Value("${minio.bucketName}")
-    private String bucketName;
-
     public FileServiceImpl(MinioClient minioClient, FileMapper fileMapper, UserMapper userMapper) {
         this.minioClient = minioClient;
         this.fileMapper = fileMapper;

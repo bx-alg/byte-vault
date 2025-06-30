@@ -67,5 +67,6 @@ minio:
   endpoint: http://localhost:9000
   accessKey: admin
   secretKey: admin123
-  bucketName: bytevault-avatar
-  userFilesBucket: user-files 
+  avatarBucketName: bytevault-avatar
+  userFilesBucketName: user-files
+  backgroundBucketName: background-images 

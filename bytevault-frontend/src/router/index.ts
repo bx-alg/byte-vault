@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
+import BackgroundSettings from '@/components/BackgroundSettings.vue'
 
 // 环境变量类型声明
 declare global {
@@ -35,6 +36,12 @@ const routes: RouteRecordRaw[] = [
     path: '/profile',
     name: 'Profile',
     component: () => import('@/components/UserProfile.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/background',
+    name: 'Background',
+    component: BackgroundSettings,
     meta: { requiresAuth: true }
   },
   {

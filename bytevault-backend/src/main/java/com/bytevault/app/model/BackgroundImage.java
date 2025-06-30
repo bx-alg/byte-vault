@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableField;
 import java.time.LocalDateTime;
-import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,37 +16,23 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("user")
-public class User {
+@TableName("user_background_images")
+public class BackgroundImage {
 
     @TableId(type = IdType.AUTO)
     private Long id;
     
-    private String username;
-    private String password;
+    @TableField("user_id")
+    private Long userId;
     
-    @TableField("avatar_url")
-    private String avatarUrl;
+    @TableField("image_url")
+    private String imageUrl;
     
-    @TableField("current_background_image_id")
-    private Long currentBackgroundImageId;
-    
-    @Builder.Default
-    private Integer status = 1;
+    @TableField("upload_time")
+    private LocalDateTime uploadTime;
     
     @TableLogic
+    @TableField("is_deleted")
     @Builder.Default
     private Integer deleted = 0;
-    
-    @TableField("create_time")
-    private LocalDateTime createTime;
-    
-    @TableField("update_time")
-    private LocalDateTime updateTime;
-    
-    @TableField(exist = false)
-    private List<Role> roles;
-    
-    @TableField(exist = false)
-    private String backgroundImageUrl;
 } 

@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :style="backgroundStyle">
     <el-container v-if="userStore.isLoggedIn">
       <el-header>
         <div class="header-content">
@@ -14,6 +14,7 @@
           >
             <el-menu-item index="/">首页</el-menu-item>
             <el-menu-item index="/admin" v-if="userStore.hasRole('admin')">用户管理</el-menu-item>
+            <el-menu-item index="/background">背景设置</el-menu-item>
           </el-menu>
           <div class="user-actions">
             <el-dropdown @command="handleUserAction">
@@ -29,6 +30,7 @@
                     <el-dialog v-model="show" title="个人资料">
                       <UserProfile />
                     </el-dialog>
+                  <el-dropdown-item command="background">背景设置</el-dropdown-item>
                   <el-dropdown-item command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -59,19 +61,35 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'
-import { ref } from 'vue'
 import UserProfile from '@/components/UserProfile.vue'
 
 const userStore = useUserStore()
 const route = useRoute()
+const router = useRouter()
 const show = ref(false)
 
 // 计算当前活动菜单项
 const activeMenuItem = computed(() => route.path)
+
+// 计算背景样式
+const backgroundStyle = computed(() => {
+  if (userStore.userInfo?.backgroundImageUrl) {
+  
+    return {
+      backgroundImage: `url(${userStore.userInfo.backgroundImageUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+      backgroundColor: 'rgba(255, 255, 255, 0.9)'
+    }
+
+  }
+  return {}
+})
 
 // 处理用户下拉菜单操作
 const handleUserAction = async (command: string) => {
@@ -93,13 +111,28 @@ const handleUserAction = async (command: string) => {
         // 用户取消操作
       }
       break
+    case 'background':
+      router.push('/background')
+      break
   }
 }
 
+// 监听用户信息变化，获取背景图片
+watch(() => userStore.userInfo, async (newUserInfo) => {
+  if (newUserInfo) {
+    await userStore.fetchBackgroundImages()
+  }
+}, { immediate: true })
+
 // 初始化
-onMounted(() => {
+onMounted(async () => {
   // 初始化用户存储
   userStore.init()
+  
+  // 如果用户已登录，获取背景图片
+  if (userStore.isLoggedIn) {
+    await userStore.fetchBackgroundImages()
+  }
 })
 </script>
 
@@ -121,6 +154,20 @@ html, body {
 
 .app-container {
   height: 100vh;
+  position: relative;
+}
+
+/* 背景图片叠加层 */
+.app-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.5); /* 将透明度从0.8降低到0.5 */
+  z-index: 0;
+  pointer-events: none;
 }
 
 /* 头部样式 */
@@ -129,6 +176,7 @@ html, body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   position: relative;
   z-index: 100;
+  background-color: rgba(255, 255, 255, 0.95);
 }
 
 .header-content {
@@ -164,13 +212,18 @@ html, body {
   padding: 20px;
   height: calc(100vh - 120px);
   overflow-y: auto;
+  position: relative;
+  z-index: 1;
+  background-color: rgba(255, 255, 255, 0.4); /* 将透明度从0.7降低到0.4 */
 }
 
 /* 页脚样式 */
 .el-footer {
-  background-color: #f5f7fa;
+  background-color: rgba(245, 247, 250, 0.9);
   padding: 0;
   height: 60px;
+  position: relative;
+  z-index: 100;
 }
 
 .footer-content {

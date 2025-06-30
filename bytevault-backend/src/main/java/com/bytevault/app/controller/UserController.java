@@ -1,18 +1,25 @@
 package com.bytevault.app.controller;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.bytevault.app.auth.model.UserDetailsImpl;
 import com.bytevault.app.auth.service.AuthService;
 import com.bytevault.app.model.AvatarUploadResponse;
+import com.bytevault.app.model.BackgroundImage;
 import com.bytevault.app.model.User;
+import com.bytevault.app.service.BackgroundImageService;
 import com.bytevault.app.service.UserService;
 
 import io.minio.*;
 import io.minio.http.Method;
+
+import org.apache.commons.io.IOUtils;
 
 import java.io.InputStream;
 import java.util.HashMap;
@@ -34,9 +41,13 @@ public class UserController {
     private final UserService userService;
     private final AuthService authService;
     private final MinioClient minioClient;
+    private final BackgroundImageService backgroundImageService;
     
-    @Value("${minio.bucketName}")
+    @Value("${minio.avatarBucketName}")
     private String avatarBucket;
+
+    @Value("${minio.backgroundBucketName}")
+    private String backgroundBucket;
 
     @GetMapping
     public ResponseEntity<List<User>> getAllUsers() {
@@ -275,4 +286,138 @@ public class UserController {
         
         return null;
     }
-} 
+
+    
+
+    /**
+     * 上传背景图片
+     */
+    @PostMapping(value = "/background", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadBackgroundImage(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        
+        try {
+            BackgroundImage image = backgroundImageService.uploadBackgroundImage(file, userDetails.getId());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "背景图片上传成功");
+            response.put("imageId", image.getId());
+            response.put("imageUrl", image.getImageUrl());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "背景图片上传失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    /**
+     * 获取用户的所有背景图片
+     */
+    @GetMapping("/background/my")
+    public ResponseEntity<Map<String, Object>> getUserBackgroundImages(
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        
+        List<BackgroundImage> images = backgroundImageService.getUserBackgroundImages(userDetails.getId());
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "获取背景图片列表成功");
+        response.put("images", images);
+        response.put("currentBackgroundUrl", backgroundImageService.getCurrentBackgroundImageUrl(userDetails.getId()));
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * 删除背景图片
+     */
+    @DeleteMapping("/background/{imageId}")
+    public ResponseEntity<Map<String, Object>> deleteBackgroundImage(
+            @PathVariable Long imageId,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        
+        boolean success = backgroundImageService.deleteBackgroundImage(imageId, userDetails.getId());
+        
+        Map<String, Object> response = new HashMap<>();
+        if (success) {
+            response.put("message", "背景图片删除成功");
+            return ResponseEntity.ok(response);
+        } else {
+            response.put("message", "背景图片删除失败");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+    /**
+     * 设置当前背景图片
+     */
+    @PutMapping("/background/{imageId}/set-current")
+    public ResponseEntity<Map<String, Object>> setCurrentBackgroundImage(
+            @PathVariable Long imageId,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        
+        boolean success = backgroundImageService.setCurrentBackgroundImage(imageId, userDetails.getId());
+        
+        Map<String, Object> response = new HashMap<>();
+        if (success) {
+            response.put("message", "设置当前背景图片成功");
+            return ResponseEntity.ok(response);
+        } else {
+            response.put("message", "设置当前背景图片失败");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+    /**
+     * 获取当前背景图片
+     */
+    @GetMapping("/background/current")
+    public ResponseEntity<Map<String, Object>> getCurrentBackgroundImage(
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        
+        String imageUrl = backgroundImageService.getCurrentBackgroundImageUrl(userDetails.getId());
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "获取当前背景图片成功");
+        response.put("imageUrl", imageUrl);
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * 代理访问背景图片 - 直接返回图片内容
+     */
+    @GetMapping("/background/{userId}/{filename:.+}")
+    public ResponseEntity<byte[]> getBackgroundImage(
+            @PathVariable String userId,
+            @PathVariable String filename) {
+        
+        try {
+            String objectName = userId + "/" + filename;
+            
+            // 直接获取对象内容
+            InputStream is = minioClient.getObject(
+                    GetObjectArgs.builder()
+                            .bucket(backgroundBucket)
+                            .object(objectName)
+                            .build());
+            
+            // 读取图片内容
+            byte[] imageBytes = IOUtils.toByteArray(is);
+            is.close();
+            
+            // 设置响应头
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.IMAGE_JPEG); // 或根据实际情况设置其他媒体类型
+            headers.setCacheControl("max-age=31536000"); // 缓存一年
+            
+            // 返回图片内容
+            return new ResponseEntity<>(imageBytes, headers, HttpStatus.OK);
+        } catch (Exception e) {
+            log.error("获取背景图片失败: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+}

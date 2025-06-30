@@ -17,6 +17,18 @@ CREATE TABLE user_files (
 );
 
 
+create table user_background_images
+(
+    id          bigint primary key auto_increment,
+    user_id     bigint not null,
+    image_url   varchar(255) not null,
+    upload_time timestamp default current_timestamp,
+    is_deleted  tinyint default 0 comment '逻辑删除标志，0=正常，1=已删除'
+
+);
+-- 背景图片索引
+CREATE INDEX idx_user_id ON user_background_images(user_id);
+
 -- 查询某用户某文件夹下的文件（核心索引）
 CREATE INDEX idx_user_folder ON user_files(user_id, parent_id, is_deleted);
 

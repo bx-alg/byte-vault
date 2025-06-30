@@ -21,6 +21,9 @@ CREATE TABLE `user` (
     `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+-- 添加当前激活背景图片ID
+alter table user
+add column current_background_image_id bigint default 1 comment '当前激活背景图片ID';
 
 -- 创建角色表
 CREATE TABLE `role` (

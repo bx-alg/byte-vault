@@ -35,7 +35,7 @@ public class FileProxyController {
     private final FileService fileService;
     private final MinioClient minioClient;
     
-    @Value("${minio.userFilesBucket}")
+    @Value("${minio.userFilesBucketName}")
     private String userFilesBucket;
 
     /**

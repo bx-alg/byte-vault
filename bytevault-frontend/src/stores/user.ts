@@ -3,13 +3,23 @@ import { ref, computed } from 'vue'
 import { login, logout, getUserInfo, register } from '@/api/auth'
 import router from '@/router'
 import { uploadAvatar } from '@/api/user'
+import { backgroundApi } from '@/api/background'
 
 export interface UserInfo {
   id: number
   username: string
   status: number
   avatarUrl?: string
+  backgroundImageUrl?: string
+  currentBackgroundImageId?: number
   roles?: any[]
+}
+
+export interface BackgroundImage {
+  id: number
+  userId: number
+  imageUrl: string
+  uploadTime: string
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -17,6 +27,8 @@ export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
   const userInfo = ref<UserInfo | null>(null)
   const loading = ref<boolean>(false)
+  const backgroundImages = ref<BackgroundImage[]>([])
+  const currentBackgroundUrl = ref<string | null>(null)
 
   // 计算属性
   const isLoggedIn = computed(() => !!token.value)
@@ -48,6 +60,9 @@ export const useUserStore = defineStore('user', () => {
       token.value = res.token
       localStorage.setItem('token', token.value)
       userInfo.value = res.user
+      
+      // 获取背景图片信息
+      fetchBackgroundImages()
 
       // 登录成功后跳转
       const redirectPath = router.currentRoute.value.query.redirect as string || '/'
@@ -69,6 +84,11 @@ export const useUserStore = defineStore('user', () => {
       loading.value = true
       const res = await getUserInfo()
       userInfo.value = res
+      
+      // 获取背景图片信息
+      if (userInfo.value) {
+        fetchBackgroundImages()
+      }
     } catch (error) {
       console.error('获取用户信息失败:', error)
       // 如果获取用户信息失败，可能是令牌已过期，清除本地状态
@@ -91,6 +111,8 @@ export const useUserStore = defineStore('user', () => {
       // 无论是否成功调用登出API，都清除本地状态
       token.value = ''
       userInfo.value = null
+      backgroundImages.value = []
+      currentBackgroundUrl.value = null
       localStorage.removeItem('token')
       router.push('/login')
     }
@@ -147,11 +169,97 @@ export const useUserStore = defineStore('user', () => {
       loading.value = false
     }
   }
+  
+  // 获取用户背景图片列表
+  const fetchBackgroundImages = async () => {
+    try {
+      loading.value = true
+      const response = await backgroundApi.getUserBackgroundImages() as any
+      if (response && response.images) {
+        backgroundImages.value = response.images || []
+        currentBackgroundUrl.value = response.currentBackgroundUrl || null
+        
+        // 更新用户信息中的背景图片URL
+        if (userInfo.value && currentBackgroundUrl.value) {
+          userInfo.value.backgroundImageUrl = currentBackgroundUrl.value
+        }
+      }
+      
+      return backgroundImages.value
+    } catch (error) {
+      console.error('获取背景图片列表失败:', error)
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  // 上传背景图片
+  const uploadBackgroundImage = async (file: File) => {
+    try {
+      loading.value = true
+      const response = await backgroundApi.uploadBackgroundImage(file) as any
+      console.log(response)
+      if (response && response.imageId) {
+        // 上传成功后刷新背景图片列表
+        await fetchBackgroundImages()
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('上传背景图片失败:', error)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  // 设置当前背景图片
+  const setCurrentBackgroundImage = async (imageId: number) => {
+    try {
+      loading.value = true
+      const response = await backgroundApi.setCurrentBackgroundImage(imageId)
+      
+      if (response) {
+        // 设置成功后刷新背景图片列表
+        await fetchBackgroundImages()
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('设置背景图片失败:', error)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  // 删除背景图片
+  const deleteBackgroundImage = async (imageId: number) => {
+    try {
+      loading.value = true
+      const response = await backgroundApi.deleteBackgroundImage(imageId)
+      
+      if (response) {
+        // 删除成功后刷新背景图片列表
+        await fetchBackgroundImages()
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('删除背景图片失败:', error)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
 
   return {
     token,
     userInfo,
     loading,
+    backgroundImages,
+    currentBackgroundUrl,
     isLoggedIn,
     hasRole,
     loginAction,
@@ -160,6 +268,10 @@ export const useUserStore = defineStore('user', () => {
     checkSession,
     init,
     registerAction,
-    uploadAvatar: uploadAvatarAction
+    uploadAvatar: uploadAvatarAction,
+    fetchBackgroundImages,
+    uploadBackgroundImage,
+    setCurrentBackgroundImage,
+    deleteBackgroundImage
   }
 }) 

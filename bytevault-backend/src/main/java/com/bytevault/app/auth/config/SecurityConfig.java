@@ -65,6 +65,9 @@ public class SecurityConfig {
                 .antMatchers(HttpMethod.POST, "/api/users", "/users").permitAll()
                 .antMatchers(HttpMethod.GET, "/api/users/exists/**", "/users/exists/**").permitAll()
                 
+                // 允许背景图片和头像无需认证访问
+                .antMatchers(HttpMethod.GET, "/api/users/background/**", "/api/users/avatar/**").permitAll()
+                
                 // 基于角色的访问控制
                 // 管理员接口
                 .antMatchers("/api/admin/**", "/admin/**").hasRole("admin")
