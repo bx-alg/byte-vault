@@ -148,6 +148,19 @@ html, body {
   color: #2c3e50;
 }
 
+/* 修复Element Plus的el-tag组件中的小点问题 - 彻底版 */
+.el-tag .el-tag__content::after,
+.el-tag::after,
+.el-tag *::after,
+.el-tag__content::after {
+  display: none !important;
+}
+
+/* 强制所有el-tag相关元素不显示伪元素 */
+[class*="el-tag"] *::after {
+  display: none !important;
+}
+
 #app {
   height: 100%;
 }

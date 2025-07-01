@@ -119,7 +119,7 @@
 
         <el-table-column label="状态" prop="visibility" width="80">
           <template #default="scope">
-            <el-tag :type="scope.row.visibility === 'public' ? 'success' : 'info'" class="status-tag">
+            <el-tag :type="scope.row.visibility === 'public' ? 'success' : 'info'" class="status-tag no-after">
               {{ scope.row.visibility === 'public' ? '公开' : '私有' }}
             </el-tag>
           </template>
@@ -177,6 +177,7 @@ import { Document, Search, Upload, Folder, FolderAdd } from '@element-plus/icons
 import { fileApi } from '@/api'
 import type { UploadRequestOptions } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 
 // 定义组件属性
 const props = defineProps({
@@ -348,21 +349,24 @@ const handleDownload = async (file: any) => {
     loading.value = true
     emit('update:loading', true)
 
-    const response = await fileApi.getFileDownloadUrl(file.id) as any
-    console.log(response)
-    if (response && response.downloadUrl) {
-      // 创建临时链接并点击下载
-      const link = document.createElement('a')
-      link.href = response.downloadUrl
-      link.setAttribute('download', file.filename)
-      document.body.appendChild(link)
-      link.click()
+    // 使用fileApi提供的方法下载文件，确保正确携带token
+    const response = await fileApi.downloadFileDirectly(file.id)
+    
+    // 创建Blob URL并触发下载
+    const url = window.URL.createObjectURL(response)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', file.filename)
+    document.body.appendChild(link)
+    link.click()
+    
+    // 清理
+    setTimeout(() => {
       document.body.removeChild(link)
-
-      ElMessage.success('文件下载开始')
-    } else {
-      ElMessage.error('获取下载链接失败')
-    }
+      window.URL.revokeObjectURL(url)
+    }, 100)
+    
+    ElMessage.success('文件下载开始')
   } catch (error) {
     console.error('文件下载失败:', error)
     ElMessage.error('文件下载失败，请稍后重试')
@@ -573,22 +577,40 @@ const handleCurrentChange = (page: number) => {
 
 // 格式化文件大小
 const formatFileSize = (size: number) => {
-  if (size < 1024) {
-    return size + ' B'
-  } else if (size < 1024 * 1024) {
-    return (size / 1024).toFixed(2) + ' KB'
-  } else if (size < 1024 * 1024 * 1024) {
-    return (size / (1024 * 1024)).toFixed(2) + ' MB'
-  } else {
-    return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let index = 0
+  let convertedSize = size
+  
+  // 当文件大小大于1024且单位还没到TB时，继续转换
+  while (convertedSize >= 1024 && index < units.length - 1) {
+    convertedSize /= 1024
+    index++
   }
+  
+  // 根据大小决定小数点位数
+  // 对于B不显示小数点，KB保留1位小数，MB及以上保留2位小数
+  let decimalPlaces = 0
+  if (index === 1) decimalPlaces = 1      // KB保留1位小数
+  else if (index >= 2) decimalPlaces = 2  // MB及以上保留2位小数
+  
+  // 格式化数字并添加单位
+  return convertedSize.toFixed(decimalPlaces).replace(/\.0+$/, '') + ' ' + units[index]
 }
 
 // 格式化日期
 const formatDate = (dateStr: string) => {
   if (!dateStr) return ''
   const date = new Date(dateStr)
-  return date.toLocaleString()
+  
+  // 获取年月日时分
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  
+  // 返回格式化后的日期字符串：YYYY-MM-DD HH:MM
+  return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
 // 触发文件夹上传
@@ -764,6 +786,15 @@ defineExpose({
 
 .status-tag {
   font-weight: bold;
+}
+
+/* 使用深度选择器覆盖el-tag的样式，移除小圆点 */
+:deep(.status-tag .el-tag__content::after) {
+  display: none !important;
+}
+
+:deep(.el-tag__content::after) {
+  display: none !important;
 }
 
 .empty-files {

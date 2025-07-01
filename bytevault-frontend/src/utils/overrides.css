@@ -1,0 +1,62 @@
+/* 
+ * 全局样式覆盖 - 解决Element Plus组件样式问题
+ */
+
+/* 修复el-tag组件中的小点问题 - 强力覆盖所有可能的伪元素 */
+.el-tag *,
+.el-tag,
+.el-tag__content,
+.status-tag,
+.el-tag__content * {
+  position: relative;
+}
+
+/* 彻底覆盖所有el-tag相关元素的伪元素 */
+.el-tag *::after,
+.el-tag::after,
+.el-tag__content::after,
+.status-tag::after,
+.el-tag .el-tag__content::after,
+.el-tag__content *::after,
+[class*="el-tag"] *::after,
+[class*="el-tag"]::after,
+.el-tag-content::after,
+*[class*="el-tag"]::after {
+  display: none !important;
+  content: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* 保留el-select-dropdown中必要的::after伪元素，但排除status-tag */
+.el-select-dropdown__item.is-selected:not(.status-tag):after {
+  display: inline-block !important;
+  content: "" !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* 在文件浏览器组件中特别处理状态标签 */
+.file-explorer .el-tag,
+.file-explorer .el-tag__content,
+.file-explorer .status-tag {
+  display: inline-flex !important;
+  border-radius: var(--el-tag-border-radius) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+/* 强制直接移除tag中可能的小点 */
+.el-tag:before,
+.el-tag:after,
+.el-tag *:before,
+.el-tag *:after {
+  display: none !important;
+  content: none !important;
+} 

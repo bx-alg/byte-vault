@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import axios from 'axios'
 
 /**
  * 上传文件
@@ -194,6 +195,21 @@ export function updateFolderPublicStatus(folderId: number, isPublic: boolean) {
 }
 
 /**
+ * 直接下载文件（返回Blob对象）
+ * @param fileId 文件ID
+ * @returns Blob对象
+ */
+export function downloadFileDirectly(fileId: number) {
+  const token = localStorage.getItem('token')
+  return axios.get(`/api/files/proxy/${fileId}`, {
+    responseType: 'blob',
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : ''
+    }
+  }).then(response => response.data)
+}
+
+/**
  * 导出所有API
  * @returns 所有API对象
  */
@@ -208,5 +224,6 @@ export const fileApi = {
   updateFilePublicStatus,
   updateFolderPublicStatus,
   searchFiles,
-  getFileInfo
+  getFileInfo,
+  downloadFileDirectly
 } 

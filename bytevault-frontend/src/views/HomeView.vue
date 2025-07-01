@@ -3,7 +3,6 @@
     <!-- 页面标题 -->
     <div class="page-header">
       <div class="title-container">
-        <img src="@/assets/cute.jpeg" class="title-decoration" alt="装饰" />
         <h1 class="main-title">ByteVault <span class="subtitle">文件管理系统</span></h1>
       </div>
       
@@ -112,15 +111,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   position: relative;
-}
-
-.title-decoration {
-  width: 50px;
-  height: 50px;
-  object-fit: cover;
-  border-radius: 50%;
-  margin-right: 10px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .main-title {

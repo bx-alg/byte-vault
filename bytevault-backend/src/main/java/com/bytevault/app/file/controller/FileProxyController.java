@@ -55,7 +55,14 @@ public class FileProxyController {
             }
             
             // 检查权限
-            if (!fileInfo.getUserId().equals(userDetails.getId()) && !"public".equals(fileInfo.getVisibility())) {
+            if (userDetails == null) {
+                // 未登录用户只能访问公开文件
+                if (!"public".equals(fileInfo.getVisibility())) {
+                    log.warn("未登录用户尝试访问非公开文件: {}", fileId);
+                    return ResponseEntity.status(403).build();
+                }
+            } else if (!fileInfo.getUserId().equals(userDetails.getId()) && !"public".equals(fileInfo.getVisibility())) {
+                // 已登录用户只能访问自己的文件和公开文件
                 log.warn("无权限下载文件: {}, 用户ID: {}", fileId, userDetails.getId());
                 return ResponseEntity.status(403).build();
             }
@@ -81,6 +88,7 @@ public class FileProxyController {
                     .replace("+", "%20"); // 替换空格
             
             HttpHeaders headers = new HttpHeaders();
+            // 强制浏览器下载文件而不是打开
             headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFilename);
             headers.add(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, must-revalidate");
             headers.add(HttpHeaders.PRAGMA, "no-cache");
@@ -96,7 +104,8 @@ public class FileProxyController {
                 }
             }
             
-            log.info("代理下载文件: {}, 用户: {}", fileInfo.getFilename(), userDetails.getUsername());
+            log.info("代理下载文件: {}, 用户: {}", fileInfo.getFilename(), 
+                    userDetails != null ? userDetails.getUsername() : "匿名用户");
             return ResponseEntity.ok()
                     .headers(headers)
                     .contentType(contentType)

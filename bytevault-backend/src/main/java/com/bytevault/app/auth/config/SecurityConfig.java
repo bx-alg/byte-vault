@@ -50,34 +50,41 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             // 配置请求授权规则
             .authorizeRequests(authorize -> authorize
-                // 允许所有OPTIONS请求（预检请求）
-                .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // 允许访问Swagger和API文档
-                .antMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                // 允许访问静态资源
-                .antMatchers("/", "/favicon.ico", "/**/*.png", "/**/*.gif", "/**/*.svg", 
-                             "/**/*.jpg", "/**/*.html", "/**/*.css", "/**/*.js").permitAll()
-                // 允许不需要认证的API路径 - 确保同时匹配/api/auth/**和/auth/**
-                .antMatchers("/api/auth/**", "/auth/**").permitAll()
-                // 开发环境允许H2数据库控制台
-                .antMatchers("/h2-console/**").permitAll()
-                // 用户相关API允许匿名访问（注册等）
-                .antMatchers(HttpMethod.POST, "/api/users", "/users").permitAll()
-                .antMatchers(HttpMethod.GET, "/api/users/exists/**", "/users/exists/**").permitAll()
+                // 允许所有人访问登录和注册接口
+                .antMatchers("/api/auth/login", "/api/auth/register").permitAll()
+                .antMatchers("/auth/login", "/auth/register").permitAll()
                 
-                // 允许背景图片和头像无需认证访问
-                .antMatchers(HttpMethod.GET, "/api/users/background/**", "/api/users/avatar/**").permitAll()
+                // 允许所有人访问公开文件代理接口
+                .antMatchers("/api/files/proxy/**").permitAll()
                 
-                // 基于角色的访问控制
-                // 管理员接口
-                .antMatchers("/api/admin/**", "/admin/**").hasRole("admin")
+                // 允许所有人访问公开文件列表接口
+                .antMatchers("/api/files/public").permitAll()
+                .antMatchers("/files/public").permitAll()
                 
-                // 基于权限的访问控制
-                // 文件上传
-                .antMatchers(HttpMethod.POST, "/api/files/**", "/files/**").hasAuthority("file:upload")
-                // 文件删除
-                .antMatchers(HttpMethod.DELETE, "/api/files/**", "/files/**").hasAuthority("file:delete")
-                // 文件分享
+                // 静态资源不需要认证
+                .antMatchers(
+                    "/",
+                    "/favicon.ico",
+                    "/**/*.png",
+                    "/**/*.gif",
+                    "/**/*.svg",
+                    "/**/*.jpg",
+                    "/**/*.jpeg",
+                    "/**/*.html",
+                    "/**/*.css",
+                    "/**/*.js"
+                ).permitAll()
+                
+                // 管理员相关接口需要 ADMIN 角色
+                .antMatchers("/api/admin/**", "/admin/**").hasRole("ADMIN")
+                
+                // 用户相关接口需要认证
+                .antMatchers("/api/user/**", "/user/**").authenticated()
+                
+                // 文件管理相关接口需要认证
+                .antMatchers("/api/files/**", "/files/**").authenticated()
+                
+                // 需要特定权限的操作
                 .antMatchers("/api/files/*/share", "/files/*/share").hasAuthority("file:share")
                 
                 // 所有其他请求需要认证
