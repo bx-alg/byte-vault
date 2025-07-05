@@ -5,6 +5,7 @@ import com.bytevault.app.auth.model.UserDetailsImpl;
 import com.bytevault.app.file.service.FileService;
 import com.bytevault.app.model.FileInfo;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,12 +21,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/files")
 @RequiredArgsConstructor
+@Slf4j
 public class FileController {
 
     private final FileService fileService;
 
     /**
-     * 上传文件
+     * 上传文件 (使用断点续传实现)
      */
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadFile(
@@ -35,7 +37,19 @@ public class FileController {
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
 
         try {
-            FileInfo fileInfo = fileService.uploadFile(file, userDetails.getId(), parentId, isPublic);
+            // 使用断点续传逻辑处理单个文件上传
+            String filename = file.getOriginalFilename();
+            Long fileSize = file.getSize();
+            String fileType = file.getContentType();
+            
+            // 1. 初始化上传
+            String uploadId = fileService.initChunkUpload(filename, fileSize, fileType, userDetails.getId(), parentId, isPublic);
+            
+            // 2. 上传单个分块
+            fileService.uploadChunk(uploadId, 0, file, userDetails.getId());
+            
+            // 3. 完成上传
+            FileInfo fileInfo = fileService.completeChunkUpload(uploadId, 1, userDetails.getId());
 
             Map<String, Object> response = new HashMap<>();
             response.put("message", "文件上传成功");
@@ -297,6 +311,115 @@ public class FileController {
         } else {
             response.put("message", "文件夹公开状态更新失败");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * 初始化分块上传
+     */
+    @PostMapping("/chunk/init")
+    public ResponseEntity<Map<String, Object>> initChunkUpload(
+            @RequestBody Map<String, Object> request,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+
+        try {
+            String filename = (String) request.get("filename");
+            Long fileSize = Long.valueOf(request.get("fileSize").toString());
+            String fileType = (String) request.get("fileType");
+            Long parentId = Long.valueOf(request.get("parentId").toString());
+            boolean isPublic = Boolean.parseBoolean(request.get("isPublic").toString());
+
+            String uploadId = fileService.initChunkUpload(filename, fileSize, fileType, userDetails.getId(), parentId, isPublic);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "初始化分块上传成功");
+            response.put("uploadId", uploadId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "初始化分块上传失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 上传分块
+     */
+    @PostMapping("/chunk/upload")
+    public ResponseEntity<Map<String, Object>> uploadChunk(
+            @RequestParam("uploadId") String uploadId,
+            @RequestParam("chunkIndex") int chunkIndex,
+            @RequestParam("chunk") MultipartFile chunk,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            log.info("上传分块: uploadId={}, chunkIndex={}, chunkSize={} bytes", uploadId, chunkIndex, chunk.getSize());
+            
+            boolean result = fileService.uploadChunk(uploadId, chunkIndex, chunk, userDetails.getId());
+            
+            if (result) {
+                response.put("success", true);
+                response.put("message", "分块上传成功");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "分块上传失败");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+        } catch (Exception e) {
+            log.error("分块上传异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "分块上传异常: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 获取已上传的分块列表
+     */
+    @GetMapping("/chunk/uploaded/{uploadId}")
+    public ResponseEntity<Map<String, Object>> getUploadedChunks(
+            @PathVariable String uploadId,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+
+        try {
+            List<Integer> uploadedChunks = fileService.getUploadedChunks(uploadId, userDetails.getId());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "获取已上传分块列表成功");
+            response.put("uploadedChunks", uploadedChunks);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "获取已上传分块列表失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 完成分块上传
+     */
+    @PostMapping("/chunk/complete/{uploadId}")
+    public ResponseEntity<Map<String, Object>> completeChunkUpload(
+            @PathVariable String uploadId,
+            @RequestBody Map<String, Object> request,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+
+        try {
+            int totalChunks = Integer.parseInt(request.get("totalChunks").toString());
+            FileInfo fileInfo = fileService.completeChunkUpload(uploadId, totalChunks, userDetails.getId());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "文件上传完成");
+            response.put("fileId", fileInfo.getId());
+            response.put("fileName", fileInfo.getFilename());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "完成文件上传失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 }

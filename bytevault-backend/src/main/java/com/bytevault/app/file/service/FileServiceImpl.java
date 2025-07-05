@@ -10,14 +10,19 @@ import io.minio.*;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.SequenceInputStream;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -26,6 +31,7 @@ public class FileServiceImpl implements FileService {
     private final MinioClient minioClient;
     private final FileMapper fileMapper;
     private final UserMapper userMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Value("${minio.userFilesBucketName}")
     private String userFilesBucket;
@@ -33,10 +39,19 @@ public class FileServiceImpl implements FileService {
     @Value("${minio.endpoint}")
     private String endpoint;
     
-    public FileServiceImpl(MinioClient minioClient, FileMapper fileMapper, UserMapper userMapper) {
+    // Redis键前缀
+    private static final String UPLOAD_ID_PREFIX = "chunk_upload:";
+    private static final String UPLOAD_CHUNKS_PREFIX = "chunk_upload_chunks:";
+    private static final String UPLOAD_INFO_PREFIX = "chunk_upload_info:";
+    
+    // 上传过期时间（24小时）
+    private static final long UPLOAD_EXPIRATION = 24 * 60 * 60;
+    
+    public FileServiceImpl(MinioClient minioClient, FileMapper fileMapper, UserMapper userMapper, RedisTemplate<String, Object> redisTemplate) {
         this.minioClient = minioClient;
         this.fileMapper = fileMapper;
         this.userMapper = userMapper;
+        this.redisTemplate = redisTemplate;
     }
 
     @Override
@@ -529,6 +544,225 @@ public class FileServiceImpl implements FileService {
         } catch (Exception e) {
             log.error("更新文件夹公开状态失败: {}", e.getMessage(), e);
             return false;
+        }
+    }
+
+    @Override
+    public String initChunkUpload(String filename, Long fileSize, String fileType, Long userId, Long parentId, boolean isPublic) {
+        try {
+            // 生成唯一的上传ID
+            String uploadId = UUID.randomUUID().toString();
+            
+            // 存储上传信息到Redis
+            Map<String, Object> uploadInfo = new HashMap<>();
+            uploadInfo.put("filename", filename);
+            uploadInfo.put("fileSize", fileSize);
+            uploadInfo.put("fileType", fileType);
+            uploadInfo.put("userId", userId);
+            uploadInfo.put("parentId", parentId);
+            uploadInfo.put("isPublic", isPublic);
+            uploadInfo.put("createTime", System.currentTimeMillis());
+            
+            // 保存上传信息，设置24小时过期
+            redisTemplate.opsForValue().set(UPLOAD_INFO_PREFIX + uploadId, uploadInfo, UPLOAD_EXPIRATION, TimeUnit.SECONDS);
+            
+            // 初始化已上传分块集合
+            redisTemplate.opsForValue().set(UPLOAD_CHUNKS_PREFIX + uploadId, new ArrayList<Integer>(), UPLOAD_EXPIRATION, TimeUnit.SECONDS);
+            
+            log.info("初始化分块上传: {}, 用户ID: {}", uploadId, userId);
+            return uploadId;
+        } catch (Exception e) {
+            log.error("初始化分块上传失败: {}", e.getMessage(), e);
+            throw new RuntimeException("初始化分块上传失败", e);
+        }
+    }
+
+    @Override
+    public boolean uploadChunk(String uploadId, int chunkIndex, MultipartFile chunk, Long userId) {
+        try {
+            // 获取上传信息
+            Map<String, Object> uploadInfo = (Map<String, Object>) redisTemplate.opsForValue().get(UPLOAD_INFO_PREFIX + uploadId);
+            if (uploadInfo == null) {
+                log.warn("上传ID不存在或已过期: {}", uploadId);
+                return false;
+            }
+            
+            // 验证用户权限
+            Long fileUserId = Long.valueOf(uploadInfo.get("userId").toString());
+            if (!fileUserId.equals(userId)) {
+                log.warn("无权限上传分块: {}, 用户ID: {}", uploadId, userId);
+                return false;
+            }
+            
+            // 构建分块对象名: 用户ID/uploadId/chunkIndex
+            String chunkObjectName = userId + "/chunks/" + uploadId + "/" + chunkIndex;
+            
+            // 上传分块到MinIO
+            InputStream inputStream = chunk.getInputStream();
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(userFilesBucket)
+                            .object(chunkObjectName)
+                            .stream(inputStream, chunk.getSize(), -1)
+                            .contentType("application/octet-stream")
+                            .build());
+            
+            // 更新已上传分块列表
+            List<Integer> uploadedChunks = getUploadedChunks(uploadId, userId);
+            if (!uploadedChunks.contains(chunkIndex)) {
+                uploadedChunks.add(chunkIndex);
+                redisTemplate.opsForValue().set(UPLOAD_CHUNKS_PREFIX + uploadId, uploadedChunks, UPLOAD_EXPIRATION, TimeUnit.SECONDS);
+            }
+            
+            log.info("分块上传成功: {}, 分块索引: {}, 用户ID: {}", uploadId, chunkIndex, userId);
+            return true;
+        } catch (Exception e) {
+            log.error("分块上传失败: {}", e.getMessage(), e);
+            throw new RuntimeException("分块上传失败", e);
+        }
+    }
+
+    @Override
+    public List<Integer> getUploadedChunks(String uploadId, Long userId) {
+        try {
+            // 获取上传信息
+            Map<String, Object> uploadInfo = (Map<String, Object>) redisTemplate.opsForValue().get(UPLOAD_INFO_PREFIX + uploadId);
+            if (uploadInfo == null) {
+                log.warn("上传ID不存在或已过期: {}", uploadId);
+                return new ArrayList<>();
+            }
+            
+            // 验证用户权限
+            Long fileUserId = Long.valueOf(uploadInfo.get("userId").toString());
+            if (!fileUserId.equals(userId)) {
+                log.warn("无权限获取已上传分块列表: {}, 用户ID: {}", uploadId, userId);
+                return new ArrayList<>();
+            }
+            
+            // 获取已上传分块列表
+            List<Integer> uploadedChunks = (List<Integer>) redisTemplate.opsForValue().get(UPLOAD_CHUNKS_PREFIX + uploadId);
+            if (uploadedChunks == null) {
+                uploadedChunks = new ArrayList<>();
+            }
+            
+            return uploadedChunks;
+        } catch (Exception e) {
+            log.error("获取已上传分块列表失败: {}", e.getMessage(), e);
+            throw new RuntimeException("获取已上传分块列表失败", e);
+        }
+    }
+
+    @Override
+    @Transactional
+    public FileInfo completeChunkUpload(String uploadId, int totalChunks, Long userId) {
+        try {
+            // 获取上传信息
+            Map<String, Object> uploadInfo = (Map<String, Object>) redisTemplate.opsForValue().get(UPLOAD_INFO_PREFIX + uploadId);
+            if (uploadInfo == null) {
+                log.warn("上传ID不存在或已过期: {}", uploadId);
+                throw new RuntimeException("上传ID不存在或已过期");
+            }
+            
+            // 验证用户权限
+            Long fileUserId = Long.valueOf(uploadInfo.get("userId").toString());
+            if (!fileUserId.equals(userId)) {
+                log.warn("无权限完成上传: {}, 用户ID: {}", uploadId, userId);
+                throw new RuntimeException("无权限完成上传");
+            }
+            
+            // 获取已上传分块列表
+            List<Integer> uploadedChunks = getUploadedChunks(uploadId, userId);
+            if (uploadedChunks.size() != totalChunks) {
+                log.warn("分块数量不匹配: {}, 已上传: {}, 总数: {}", uploadId, uploadedChunks.size(), totalChunks);
+                throw new RuntimeException("分块数量不匹配，请确保所有分块已上传");
+            }
+            
+            // 排序分块
+            Collections.sort(uploadedChunks);
+            
+            // 获取文件信息
+            String filename = (String) uploadInfo.get("filename");
+            Long fileSize = Long.valueOf(uploadInfo.get("fileSize").toString());
+            String fileType = (String) uploadInfo.get("fileType");
+            Long parentId = Long.valueOf(uploadInfo.get("parentId").toString());
+            boolean isPublic = Boolean.parseBoolean(uploadInfo.get("isPublic").toString());
+            
+            // 合并文件的最终对象名
+            String finalObjectName = userId + "/" + filename;
+            
+            // 使用PutObject方法手动合并文件，而不是使用ComposeObject
+            // 这样可以避开MinIO对ComposeObject的5MB最小分块大小限制
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            for (int i = 0; i < totalChunks; i++) {
+                String chunkObjectName = userId + "/chunks/" + uploadId + "/" + i;
+                
+                // 获取分块内容
+                GetObjectResponse response = minioClient.getObject(
+                        GetObjectArgs.builder()
+                                .bucket(userFilesBucket)
+                                .object(chunkObjectName)
+                                .build()
+                );
+                
+                // 将分块内容写入输出流
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = response.read(buffer, 0, buffer.length)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+                response.close();
+            }
+            
+            // 将合并后的内容上传到MinIO
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(outputStream.toByteArray());
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(userFilesBucket)
+                            .object(finalObjectName)
+                            .stream(inputStream, outputStream.size(), -1)
+                            .contentType(fileType)
+                            .build()
+            );
+            
+            // 保存文件信息到数据库
+            FileInfo fileInfo = new FileInfo();
+            fileInfo.setUserId(userId);
+            fileInfo.setFilename(filename);
+            fileInfo.setParentId(parentId);
+            fileInfo.setFileSize(fileSize);
+            fileInfo.setFileType(fileType);
+            fileInfo.setIsDir(false);
+            fileInfo.setVisibility(isPublic ? "public" : "private");
+            fileInfo.setDeleted(false);
+            fileInfo.setCreateTime(LocalDateTime.now());
+            fileInfo.setUpdateTime(LocalDateTime.now());
+            
+            fileMapper.insert(fileInfo);
+            
+            // 清理分块和上传信息
+            for (int i = 0; i < totalChunks; i++) {
+                String chunkObjectName = userId + "/chunks/" + uploadId + "/" + i;
+                try {
+                    minioClient.removeObject(
+                            RemoveObjectArgs.builder()
+                                    .bucket(userFilesBucket)
+                                    .object(chunkObjectName)
+                                    .build()
+                    );
+                } catch (Exception e) {
+                    log.warn("清理分块失败: {}", chunkObjectName, e);
+                }
+            }
+            
+            // 删除Redis中的上传信息
+            redisTemplate.delete(UPLOAD_INFO_PREFIX + uploadId);
+            redisTemplate.delete(UPLOAD_CHUNKS_PREFIX + uploadId);
+            
+            log.info("文件上传完成: {}, 文件ID: {}, 用户ID: {}", uploadId, fileInfo.getId(), userId);
+            return fileInfo;
+        } catch (Exception e) {
+            log.error("完成文件上传失败: {}", e.getMessage(), e);
+            throw new RuntimeException("完成文件上传失败", e);
         }
     }
 }

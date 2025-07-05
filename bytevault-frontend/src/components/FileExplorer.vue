@@ -32,15 +32,12 @@
 
           <div class="buttons-group">
 
-            <el-upload v-if="showUpload" class="upload-button" :show-file-list="false" :http-request="customUpload"
-              :multiple="false">
-              <el-button type="primary" class="action-button wiggle">
-                <el-icon>
-                  <Upload />
-                </el-icon>
-                上传文件
-              </el-button>
-            </el-upload>
+            <el-button v-if="showUpload" type="primary" @click="showChunkUploadDialog = true" class="action-button wiggle">
+              <el-icon>
+                <Upload />
+              </el-icon>
+              上传文件
+            </el-button>
 
             <el-button v-if="showUpload" type="warning" @click="triggerFolderUpload" class="action-button wiggle">
               <el-icon>
@@ -166,6 +163,93 @@
           @current-change="handleCurrentChange" />
       </div>
     </el-card>
+
+    <!-- 断点续传对话框 -->
+    <el-dialog v-model="showChunkUploadDialog" title="文件上传" width="500px">
+      <div class="chunk-upload-container">
+        <el-upload
+          class="chunk-upload"
+          drag
+          action="#"
+          :auto-upload="false"
+          :show-file-list="false"
+          :on-change="handleFileSelected"
+        >
+          <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+          <div class="el-upload__text">
+            拖拽文件到此处或 <em>点击选择</em>
+          </div>
+        </el-upload>
+
+        <div v-if="selectedFile" class="selected-file-info">
+          <div class="file-info-row">
+            <span class="file-label">文件名:</span>
+            <span class="file-value">{{ selectedFile.name }}</span>
+          </div>
+          <div class="file-info-row">
+            <span class="file-label">大小:</span>
+            <span class="file-value">{{ formatFileSize(selectedFile.size) }}</span>
+          </div>
+          <div class="file-info-row">
+            <span class="file-label">类型:</span>
+            <span class="file-value">{{ selectedFile.type || '未知' }}</span>
+          </div>
+        </div>
+
+        <div v-if="uploadProgress > 0" class="upload-progress-container">
+          <div class="progress-label">
+            <span>上传进度: {{ Math.floor(uploadProgress) }}%</span>
+            <span>{{ formatFileSize(uploadedSize) }} / {{ formatFileSize(selectedFile?.size || 0) }}</span>
+          </div>
+          <div class="kawaii-progress-bar">
+            <div class="kawaii-character" :style="{ left: `${uploadProgress}%` }">
+              <div class="character-face">
+                <div class="eyes"></div>
+                <div class="mouth" :class="{ 'happy-mouth': uploadProgress > 80 }"></div>
+              </div>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" :style="{ width: `${uploadProgress}%` }"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="upload-controls">
+          <el-button 
+            type="primary" 
+            @click="startChunkUpload" 
+            :disabled="!selectedFile || isUploading"
+            class="wiggle"
+          >
+            开始上传
+          </el-button>
+          <el-button 
+            type="warning" 
+            @click="pauseChunkUpload" 
+            :disabled="!isUploading || isPaused"
+            class="wiggle"
+          >
+            暂停上传
+          </el-button>
+          <el-button 
+            type="success" 
+            @click="resumeChunkUpload" 
+            :disabled="!isPaused"
+            class="wiggle"
+          >
+            继续上传
+          </el-button>
+          <el-button 
+            type="info" 
+            @click="cancelChunkUpload"
+            :disabled="!selectedFile"
+            class="wiggle"
+          >
+            取消上传
+          </el-button>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -173,7 +257,7 @@
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Search, Upload, Folder, FolderAdd } from '@element-plus/icons-vue'
+import { Document, Search, Upload, Folder, FolderAdd, UploadFilled } from '@element-plus/icons-vue'
 import { fileApi } from '@/api'
 import type { UploadRequestOptions } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -217,6 +301,19 @@ const showCreateFolder = computed(() => props.type === 'my-files')
 
 // 文件夹上传相关
 const folderInput = ref<HTMLInputElement | null>(null)
+
+// 断点续传相关
+const CHUNK_SIZE = 2 * 1024 * 1024 // 2MB 分块大小
+const showChunkUploadDialog = ref(false)
+const selectedFile = ref<File | null>(null)
+const uploadProgress = ref(0)
+const uploadedSize = ref(0)
+const isUploading = ref(false)
+const isPaused = ref(false)
+const currentUploadId = ref('')
+const uploadedChunks = ref<number[]>([])
+const totalChunks = ref(0)
+const uploadController = ref<AbortController | null>(null)
 
 // 监听浏览器历史记录变化
 const handlePopState = (event: PopStateEvent) => {
@@ -317,24 +414,10 @@ const loadFiles = async () => {
 
 // 自定义文件上传
 const customUpload = async (options: UploadRequestOptions) => {
-  try {
-    loading.value = true
-    emit('update:loading', true)
-
-    const file = options.file as File
-    const isPublic = false // 默认上传为私有文件
-
-    const response = await fileApi.uploadFile(file, currentDirectory.value.id, isPublic)
-    console.log(response)
-    ElMessage.success('文件上传成功')
-    loadFiles() // 重新加载文件列表
-  } catch (error) {
-    console.error('文件上传失败:', error)
-    ElMessage.error('文件上传失败')
-  } finally {
-    loading.value = false
-    emit('update:loading', false)
-  }
+  // 使用断点续传代替普通上传
+  selectedFile.value = options.file as File
+  showChunkUploadDialog.value = true
+  await startChunkUpload()
 }
 
 // 处理文件下载
@@ -653,6 +736,166 @@ const handleFolderUpload = async (event: Event) => {
   }
 }
 
+// 处理文件选择
+const handleFileSelected = (file: any) => {
+  selectedFile.value = file.raw
+  uploadProgress.value = 0
+  uploadedSize.value = 0
+  isPaused.value = false
+  isUploading.value = false
+}
+
+// 开始分块上传
+const startChunkUpload = async () => {
+  if (!selectedFile.value) return
+  
+  try {
+    isUploading.value = true
+    isPaused.value = false
+    uploadController.value = new AbortController()
+    
+    // 初始化上传
+    const initResponse: any = await fileApi.initChunkUpload(
+      selectedFile.value.name,
+      selectedFile.value.size,
+      selectedFile.value.type,
+      currentDirectory.value.id,
+      false // 默认私有
+    )
+    
+    if (!initResponse || !initResponse.uploadId) {
+      throw new Error('初始化上传失败')
+    }
+    
+    currentUploadId.value = initResponse.uploadId
+    
+    // 获取已上传的分块列表
+    const chunksResponse: any = await fileApi.getUploadedChunks(currentUploadId.value)
+    uploadedChunks.value = chunksResponse?.uploadedChunks || []
+    
+    // 计算总分块数
+    totalChunks.value = Math.ceil(selectedFile.value.size / CHUNK_SIZE)
+    
+    // 更新已上传大小
+    uploadedSize.value = uploadedChunks.value.length * CHUNK_SIZE
+    if (uploadedChunks.value.length > 0 && uploadedSize.value > selectedFile.value.size) {
+      uploadedSize.value = selectedFile.value.size
+    }
+    
+    // 更新进度
+    uploadProgress.value = (uploadedSize.value / selectedFile.value.size) * 100
+    
+    // 开始上传分块
+    await uploadChunks()
+    
+  } catch (error) {
+    console.error('开始上传失败:', error)
+    ElMessage.error('开始上传失败')
+    isUploading.value = false
+  }
+}
+
+// 上传分块
+const uploadChunks = async () => {
+  if (!selectedFile.value || !currentUploadId.value) return
+  
+  try {
+    const file = selectedFile.value
+    const chunks = Math.ceil(file.size / CHUNK_SIZE)
+    
+    for (let i = 0; i < chunks; i++) {
+      // 如果已暂停或已上传过该分块，则跳过
+      if (isPaused.value) {
+        return
+      }
+      
+      if (uploadedChunks.value.includes(i)) {
+        continue
+      }
+      
+      // 计算分块范围
+      const start = i * CHUNK_SIZE
+      const end = Math.min(file.size, start + CHUNK_SIZE)
+      const chunk = file.slice(start, end)
+      
+      // 上传分块
+      await fileApi.uploadChunk(currentUploadId.value, i, chunk)
+      
+      // 更新已上传分块和进度
+      uploadedChunks.value.push(i)
+      uploadedSize.value += chunk.size
+      uploadProgress.value = (uploadedSize.value / file.size) * 100
+    }
+    
+    // 所有分块上传完成，合并文件
+    if (uploadedChunks.value.length === chunks) {
+      const completeResponse = await fileApi.completeChunkUpload(currentUploadId.value, chunks)
+      ElMessage.success('文件上传成功')
+      showChunkUploadDialog.value = false
+      resetChunkUpload()
+      loadFiles() // 重新加载文件列表
+    }
+  } catch (error) {
+    if (isPaused.value) {
+      console.log('上传已暂停')
+    } else {
+      console.error('上传分块失败:', error)
+      ElMessage.error('上传分块失败')
+      isUploading.value = false
+    }
+  }
+}
+
+// 暂停上传
+const pauseChunkUpload = () => {
+  isPaused.value = true
+  uploadController.value?.abort()
+  ElMessage.info('上传已暂停')
+}
+
+// 继续上传
+const resumeChunkUpload = async () => {
+  if (!selectedFile.value || !currentUploadId.value) return
+  
+  isPaused.value = false
+  isUploading.value = true
+  uploadController.value = new AbortController()
+  
+  try {
+    // 获取最新的已上传分块列表
+    const chunksResponse: any = await fileApi.getUploadedChunks(currentUploadId.value)
+    uploadedChunks.value = chunksResponse?.uploadedChunks || []
+    
+    // 继续上传
+    await uploadChunks()
+  } catch (error) {
+    console.error('继续上传失败:', error)
+    ElMessage.error('继续上传失败')
+    isUploading.value = false
+  }
+}
+
+// 取消上传
+const cancelChunkUpload = () => {
+  uploadController.value?.abort()
+  resetChunkUpload()
+  showChunkUploadDialog.value = false
+  ElMessage.info('已取消上传')
+}
+
+// 重置上传状态
+const resetChunkUpload = () => {
+  selectedFile.value = null
+  uploadProgress.value = 0
+  uploadedSize.value = 0
+  isUploading.value = false
+  isPaused.value = false
+  currentUploadId.value = ''
+  uploadedChunks.value = []
+  totalChunks.value = 0
+  uploadController.value = null
+}
+
 // 组件挂载时加载文件列表
 onMounted(() => {
   loadFiles()
@@ -871,5 +1114,131 @@ defineExpose({
     width: 100%;
     justify-content: space-between;
   }
+}
+
+.chunk-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.selected-file-info {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 10px;
+}
+
+.file-info-row {
+  display: flex;
+  margin-bottom: 5px;
+}
+
+.file-label {
+  font-weight: bold;
+  width: 80px;
+}
+
+.file-value {
+  flex: 1;
+  word-break: break-all;
+}
+
+.upload-progress-container {
+  margin: 15px 0;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.kawaii-progress-bar {
+  position: relative;
+  height: 30px;
+  margin-top: 20px;
+}
+
+.progress-track {
+  height: 10px;
+  background-color: #e9ecef;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+.kawaii-character {
+  position: absolute;
+  bottom: 5px;
+  transform: translateX(-50%);
+  transition: left 0.3s ease;
+}
+
+.character-face {
+  width: 30px;
+  height: 30px;
+  background-color: #ffd6e0;
+  border-radius: 50%;
+  position: relative;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.eyes {
+  width: 16px;
+  height: 6px;
+  position: relative;
+  top: -2px;
+}
+
+.eyes:before, .eyes:after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #333;
+  top: 0;
+}
+
+.eyes:before {
+  left: 0;
+}
+
+.eyes:after {
+  right: 0;
+}
+
+.mouth {
+  width: 8px;
+  height: 3px;
+  background-color: #333;
+  border-radius: 2px;
+  position: relative;
+  top: 3px;
+}
+
+.happy-mouth {
+  height: 6px;
+  border-radius: 50% 50% 0 0;
+  transform: rotate(180deg);
+}
+
+.upload-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
 }
 </style>

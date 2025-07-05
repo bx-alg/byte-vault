@@ -2,24 +2,129 @@ import request from '@/utils/request'
 import axios from 'axios'
 
 /**
- * 上传文件
+ * 上传文件 (使用断点续传实现)
  * @param file 文件对象
  * @param parentId 父目录ID
  * @param isPublic 是否公开
  * @returns 上传结果
  */
-export function uploadFile(file: File, parentId: number = 0, isPublic: boolean = false) {
+export async function uploadFile(file: File, parentId: number = 0, isPublic: boolean = false) {
+  // 使用断点续传方式上传文件
+  const CHUNK_SIZE = 6 * 1024 * 1024 // 6MB 分块大小，确保大于MinIO的5MB最小要求
+  
+  // 初始化上传
+  const initResponse: any = await initChunkUpload(
+    file.name,
+    file.size,
+    file.type,
+    parentId,
+    isPublic
+  )
+  
+  if (!initResponse || !initResponse.uploadId) {
+    throw new Error('初始化上传失败')
+  }
+  
+  const uploadId = initResponse.uploadId
+  
+  // 获取已上传的分块列表
+  const chunksResponse: any = await getUploadedChunks(uploadId)
+  const uploadedChunks = chunksResponse?.uploadedChunks || []
+  
+  // 计算总分块数
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+  
+  // 上传分块
+  for (let i = 0; i < totalChunks; i++) {
+    // 如果分块已上传，则跳过
+    if (uploadedChunks.includes(i)) {
+      continue
+    }
+    
+    // 计算分块的起始和结束位置
+    const start = i * CHUNK_SIZE
+    const end = Math.min(file.size, start + CHUNK_SIZE)
+    const chunk = file.slice(start, end)
+    
+    // 上传分块
+    await uploadChunk(uploadId, i, chunk)
+  }
+  
+  // 完成上传
+  const completeResponse = await completeChunkUpload(uploadId, totalChunks)
+  return completeResponse
+}
+
+/**
+ * 初始化分块上传
+ * @param filename 文件名
+ * @param fileSize 文件大小
+ * @param fileType 文件类型
+ * @param parentId 父目录ID
+ * @param isPublic 是否公开
+ * @returns 上传ID和其他初始化信息
+ */
+export function initChunkUpload(filename: string, fileSize: number, fileType: string, parentId: number = 0, isPublic: boolean = false) {
+  return request({
+    url: '/api/files/chunk/init',
+    method: 'post',
+    data: {
+      filename,
+      fileSize,
+      fileType,
+      parentId,
+      isPublic
+    }
+  })
+}
+
+/**
+ * 上传分块
+ * @param uploadId 上传ID
+ * @param chunkIndex 分块索引
+ * @param chunk 分块数据
+ * @returns 上传结果
+ */
+export function uploadChunk(uploadId: string, chunkIndex: number, chunk: Blob) {
   const formData = new FormData()
-  formData.append('file', file)
-  formData.append('parentId', parentId.toString())
-  formData.append('isPublic', isPublic ? 'true' : 'false')
+  formData.append('uploadId', uploadId)
+  formData.append('chunkIndex', chunkIndex.toString())
+  formData.append('chunk', chunk)
   
   return request({
-    url: '/api/files/upload',
+    url: `/api/files/chunk/upload`,
     method: 'post',
     data: formData,
     headers: {
       'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+/**
+ * 获取已上传的分块列表
+ * @param uploadId 上传ID
+ * @returns 已上传的分块索引列表
+ */
+export function getUploadedChunks(uploadId: string) {
+  return request({
+    url: `/api/files/chunk/uploaded/${uploadId}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 完成分块上传
+ * @param uploadId 上传ID
+ * @param totalChunks 总分块数
+ * @returns 完成上传的结果
+ */
+export function completeChunkUpload(uploadId: string, totalChunks: number) {
+  return request({
+    url: `/api/files/chunk/complete/${uploadId}`,
+    method: 'post',
+    data: {
+      totalChunks
     }
   })
 }
@@ -225,5 +330,10 @@ export const fileApi = {
   updateFolderPublicStatus,
   searchFiles,
   getFileInfo,
-  downloadFileDirectly
+  downloadFileDirectly,
+  // 断点续传相关API
+  initChunkUpload,
+  uploadChunk,
+  getUploadedChunks,
+  completeChunkUpload
 } 
