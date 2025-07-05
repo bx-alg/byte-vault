@@ -46,6 +46,7 @@ declare module 'vue' {
     FileExplorer: typeof import('./src/components/FileExplorer.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    UploadTaskList: typeof import('./src/components/UploadTaskList.vue')['default']
     UserProfile: typeof import('./src/components/UserProfile.vue')['default']
   }
   export interface ComponentCustomProperties {
