@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch, ref, provide } from 'vue'
+import { computed, onMounted, watch, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'
@@ -72,25 +72,6 @@ const userStore = useUserStore()
 const route = useRoute()
 const router = useRouter()
 const show = ref(false)
-
-// 创建全局上传任务列表服务
-interface UploadTaskService {
-  tasks: any[]
-  addTask: ((file: File, parentId: number, isPublic: boolean) => number) | null
-}
-
-const uploadTaskService = ref<UploadTaskService>({
-  tasks: [],
-  addTask: null
-})
-
-// 提供全局上传任务服务
-provide('uploadTaskService', uploadTaskService)
-
-// 添加调试日志
-watch(() => uploadTaskService.value, (newValue) => {
-  console.log('全局上传任务服务已更新', newValue)
-}, { deep: true })
 
 // 计算当前活动菜单项
 const activeMenuItem = computed(() => route.path)
@@ -307,4 +288,4 @@ html, body {
     padding: 10px;
   }
 }
-</style> 
+</style>

@@ -27,7 +27,7 @@
         </el-empty>
 
         <div v-else class="task-list">
-          <div v-for="(task, index) in tasks" :key="index" class="task-item">
+          <div v-for="task in tasks" :key="task.id" class="task-item">
             <div class="task-info">
               <div class="file-icon">
                 <el-icon><Document /></el-icon>
@@ -36,7 +36,7 @@
                 <div class="task-name">{{ task.fileName }}</div>
                 <div class="task-meta">
                   <span class="file-size">{{ formatFileSize(task.fileSize) }}</span>
-                  <span class="task-status" :class="getStatusClass(task)">{{ getStatusText(task) }}</span>
+                  <span class="task-status" :class="getStatusClass(task.status)">{{ getStatusText(task.status) }}</span>
                 </div>
               </div>
             </div>
@@ -63,7 +63,7 @@
                 <el-button 
                   v-if="task.status === 'uploading'" 
                   size="small" 
-                  @click="pauseTask(index)"
+                  @click="pauseTask(task.id)"
                   type="warning"
                   circle
                 >
@@ -72,7 +72,7 @@
                 <el-button 
                   v-if="task.status === 'paused'" 
                   size="small" 
-                  @click="resumeTask(index)"
+                  @click="resumeTask(task.id)"
                   type="success"
                   circle
                 >
@@ -81,7 +81,7 @@
                 <el-button 
                   v-if="task.status !== 'completed'" 
                   size="small" 
-                  @click="cancelTask(index)"
+                  @click="cancelTask(task.id)"
                   type="danger"
                   circle
                 >
@@ -90,7 +90,7 @@
                 <el-button 
                   v-if="task.status === 'completed'" 
                   size="small" 
-                  @click="removeTask(index)"
+                  @click="removeTask(task.id)"
                   type="info"
                   circle
                 >
@@ -106,328 +106,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, provide, inject, computed } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useUploadTaskStore } from '@/stores/uploadTask'
 import { Back, Document, VideoPause, VideoPlay, Close, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { fileApi } from '@/api'
 
 const router = useRouter()
+const uploadTaskStore = useUploadTaskStore()
 
-// 定义任务状态类型
-type TaskStatus = 'uploading' | 'paused' | 'completed' | 'error'
-
-// 定义任务类型
-interface UploadTask {
-  fileName: string
-  fileSize: number
-  uploadedSize: number
-  progress: number
-  status: TaskStatus
-  uploadId: string
-  file: File
-  totalChunks: number
-  uploadedChunks: number[]
-  parentId: number
-  isPublic: boolean
-  abortController: AbortController | null
-}
-
-// 任务列表
-const tasks = ref<UploadTask[]>([])
-
-// 获取全局上传任务服务
-const uploadTaskService = inject('uploadTaskService', { tasks: [], addTask: null })
-
-// 计算属性：是否有已完成的任务
-const hasCompletedTasks = computed(() => {
-  return tasks.value.some(task => task.status === 'completed')
-})
+// 使用store中的状态和方法
+const { tasks, hasCompletedTasks, clearCompletedTasks, pauseTask, resumeTask, cancelTask, removeTask, getStatusText, getStatusClass, formatFileSize } = uploadTaskStore
 
 // 返回文件管理页面
 const navigateToFiles = () => {
   router.push('/')
 }
 
-// 添加新任务
-const addTask = (file: File, parentId: number = 0, isPublic: boolean = false) => {
-  console.log('添加上传任务', file.name, file.size)
-  
-  const newTask: UploadTask = {
-    fileName: file.name,
-    fileSize: file.size,
-    uploadedSize: 0,
-    progress: 0,
-    status: 'uploading',
-    uploadId: '',
-    file,
-    totalChunks: 0,
-    uploadedChunks: [],
-    parentId,
-    isPublic,
-    abortController: new AbortController()
-  }
-  
-  tasks.value.push(newTask)
-  const taskIndex = tasks.value.length - 1
-  console.log('当前任务列表', tasks.value)
-  
-  // 开始上传任务
-  startUploadTask(taskIndex)
-  
-  return taskIndex
-}
 
-// 开始上传任务
-const startUploadTask = async (taskIndex: number) => {
-  const task = tasks.value[taskIndex]
-  if (!task || task.status !== 'uploading') return
-  
-  try {
-    const CHUNK_SIZE = 6 * 1024 * 1024 // 6MB 分块大小
-    
-    // 初始化上传
-    const initResponse: any = await fileApi.initChunkUpload(
-      task.file.name,
-      task.file.size,
-      task.file.type,
-      task.parentId,
-      task.isPublic
-    )
-    
-    if (!initResponse || !initResponse.uploadId) {
-      throw new Error('初始化上传失败')
-    }
-    
-    task.uploadId = initResponse.uploadId
-    
-    // 获取已上传的分块列表
-    const chunksResponse: any = await fileApi.getUploadedChunks(task.uploadId)
-    task.uploadedChunks = chunksResponse?.uploadedChunks || []
-    
-    // 计算总分块数
-    task.totalChunks = Math.ceil(task.file.size / CHUNK_SIZE)
-    
-    // 更新已上传大小
-    task.uploadedSize = task.uploadedChunks.length * CHUNK_SIZE
-    if (task.uploadedChunks.length > 0 && task.uploadedSize > task.file.size) {
-      task.uploadedSize = task.file.size
-    }
-    
-    // 更新进度
-    task.progress = (task.uploadedSize / task.file.size) * 100
-    
-    // 上传分块
-    for (let i = 0; i < task.totalChunks; i++) {
-      // 如果任务状态不是上传中，则退出循环
-      if (task.status !== 'uploading') {
-        return
-      }
-      
-      if (task.uploadedChunks.includes(i)) {
-        continue
-      }
-      
-      // 计算分块范围
-      const start = i * CHUNK_SIZE
-      const end = Math.min(task.file.size, start + CHUNK_SIZE)
-      const chunk = task.file.slice(start, end)
-      
-      // 上传分块
-      await fileApi.uploadChunk(task.uploadId, i, chunk)
-      
-      // 更新已上传分块和进度
-      task.uploadedChunks.push(i)
-      task.uploadedSize += chunk.size
-      task.progress = (task.uploadedSize / task.file.size) * 100
-    }
-    
-    // 所有分块上传完成，合并文件
-    if (task.uploadedChunks.length === task.totalChunks) {
-      await fileApi.completeChunkUpload(task.uploadId, task.totalChunks)
-      task.status = 'completed'
-      task.progress = 100
-      ElMessage.success(`文件 ${task.fileName} 上传成功`)
-    }
-  } catch (error) {
-    console.error('上传失败:', error)
-    task.status = 'error'
-    ElMessage.error(`文件 ${task.fileName} 上传失败`)
-  }
-}
 
-// 暂停任务
-const pauseTask = (taskIndex: number) => {
-  const task = tasks.value[taskIndex]
-  if (!task) return
-  
-  task.status = 'paused'
-  task.abortController?.abort()
-  task.abortController = null
-  ElMessage.info(`已暂停上传 ${task.fileName}`)
-}
 
-// 继续任务
-const resumeTask = (taskIndex: number) => {
-  const task = tasks.value[taskIndex]
-  if (!task) return
-  
-  task.status = 'uploading'
-  task.abortController = new AbortController()
-  startUploadTask(taskIndex)
-  ElMessage.success(`继续上传 ${task.fileName}`)
-}
-
-// 取消任务
-const cancelTask = async (taskIndex: number) => {
-  try {
-    await ElMessageBox.confirm('确定要取消此上传任务吗？', '取消上传', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    
-    const task = tasks.value[taskIndex]
-    if (!task) return
-    
-    task.abortController?.abort()
-    tasks.value.splice(taskIndex, 1)
-    ElMessage.info('已取消上传任务')
-  } catch (error) {
-    // 用户取消了确认对话框
-  }
-}
-
-// 移除任务
-const removeTask = (taskIndex: number) => {
-  tasks.value.splice(taskIndex, 1)
-}
-
-// 清除已完成任务
-const clearCompletedTasks = () => {
-  tasks.value = tasks.value.filter(task => task.status !== 'completed')
-}
-
-// 获取任务状态文本
-const getStatusText = (task: UploadTask) => {
-  switch (task.status) {
-    case 'uploading': return '上传中'
-    case 'paused': return '已暂停'
-    case 'completed': return '已完成'
-    case 'error': return '上传失败'
-    default: return '未知状态'
-  }
-}
-
-// 获取任务状态样式类
-const getStatusClass = (task: UploadTask) => {
-  switch (task.status) {
-    case 'uploading': return 'status-uploading'
-    case 'paused': return 'status-paused'
-    case 'completed': return 'status-completed'
-    case 'error': return 'status-error'
-    default: return ''
-  }
-}
-
-// 格式化文件大小
-const formatFileSize = (size: number) => {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let index = 0
-  let convertedSize = size
-  
-  while (convertedSize >= 1024 && index < units.length - 1) {
-    convertedSize /= 1024
-    index++
-  }
-  
-  let decimalPlaces = 0
-  if (index === 1) decimalPlaces = 1
-  else if (index >= 2) decimalPlaces = 2
-  
-  return convertedSize.toFixed(decimalPlaces).replace(/\.0+$/, '') + ' ' + units[index]
-}
-
-// 组件挂载时添加测试任务
-onMounted(() => {
-  console.log('UploadTaskListView组件已挂载')
-  
-  // 如果任务列表为空，添加一个测试任务
-  if (tasks.value.length === 0) {
-    console.log('添加测试任务')
-    // 创建一个模拟文件对象
-    const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' })
-    
-    // 添加测试任务
-    const testTask: UploadTask = {
-      fileName: '测试文件.txt',
-      fileSize: 1024 * 1024, // 1MB
-      uploadedSize: 512 * 1024, // 0.5MB
-      progress: 50,
-      status: 'uploading',
-      uploadId: 'test-upload-id',
-      file: mockFile,
-      totalChunks: 10,
-      uploadedChunks: [0, 1, 2, 3, 4],
-      parentId: 0,
-      isPublic: false,
-      abortController: null
-    }
-    
-    tasks.value.push(testTask)
-    console.log('测试任务已添加', tasks.value)
-  }
-  
-  // 更新全局上传任务服务
-  if (uploadTaskService) {
-    // 使用类型断言解决类型问题
-    (uploadTaskService.tasks as any) = tasks.value;
-    
-    // 使用类型断言解决类型问题
-    (uploadTaskService.addTask as any) = addTask;
-    
-    console.log('全局上传任务服务已更新', uploadTaskService)
-  }
-  
-  // 检查是否有从sessionStorage传递过来的上传任务
-  const uploadTaskJson = sessionStorage.getItem('uploadTask')
-  if (uploadTaskJson) {
-    try {
-      const uploadTask = JSON.parse(uploadTaskJson)
-      
-      // 从input元素中获取文件对象
-      const fileInput = document.createElement('input')
-      fileInput.type = 'file'
-      fileInput.style.display = 'none'
-      document.body.appendChild(fileInput)
-      
-      // 监听文件选择事件
-      fileInput.addEventListener('change', (event) => {
-        const input = event.target as HTMLInputElement
-        if (input.files && input.files.length > 0) {
-          const file = input.files[0]
-          
-          // 检查文件名、大小是否与存储的信息匹配
-          if (file.name === uploadTask.fileName && file.size === uploadTask.fileSize) {
-            // 添加到上传任务列表
-            addTask(file, uploadTask.parentId, uploadTask.isPublic)
-          }
-          
-          // 清理DOM
-          document.body.removeChild(fileInput)
-        }
-      })
-      
-      // 触发文件选择
-      fileInput.click()
-      
-      // 清除sessionStorage中的任务信息
-      sessionStorage.removeItem('uploadTask')
-    } catch (error) {
-      console.error('解析上传任务信息失败:', error)
-    }
-  }
-})
 </script>
 
 <style scoped>
@@ -698,4 +396,4 @@ onMounted(() => {
     flex-wrap: wrap;
   }
 }
-</style> 
+</style>

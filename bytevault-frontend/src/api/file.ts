@@ -125,7 +125,8 @@ export function completeChunkUpload(uploadId: string, totalChunks: number) {
     method: 'post',
     data: {
       totalChunks
-    }
+    },
+    timeout: 60000 // 设置60秒超时，因为合并大文件可能需要较长时间
   })
 }
 
@@ -336,4 +337,4 @@ export const fileApi = {
   uploadChunk,
   getUploadedChunks,
   completeChunkUpload
-} 
+}

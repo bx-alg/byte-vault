@@ -206,7 +206,7 @@
           <el-button 
             type="primary" 
             @click="startChunkUpload" 
-            :disabled="!selectedFile || isUploading"
+            :disabled="!selectedFile"
             class="wiggle"
           >
             开始上传
@@ -226,20 +226,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount, inject, type Ref } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount, type Ref } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { useUploadTaskStore } from '@/stores/uploadTask'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Search, Upload, Folder, FolderAdd, UploadFilled, List } from '@element-plus/icons-vue'
 import { fileApi } from '@/api'
 import type { UploadRequestOptions } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-
-// 定义接口
-interface UploadTaskService {
-  tasks: any[]
-  addTask: ((file: File, parentId: number, isPublic: boolean) => number) | null
-}
 
 // 定义组件属性
 const props = defineProps({
@@ -260,6 +255,7 @@ const props = defineProps({
 const emit = defineEmits(['update:loading'])
 
 const userStore = useUserStore()
+const uploadTaskStore = useUploadTaskStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -284,12 +280,7 @@ const folderInput = ref<HTMLInputElement | null>(null)
 const CHUNK_SIZE = 6 * 1024 * 1024 // 6MB 分块大小，确保大于MinIO的5MB最小要求
 const showChunkUploadDialog = ref(false)
 const selectedFile = ref<File | null>(null)
-const isUploading = ref(false)
-const isPaused = ref(false)
-const currentUploadId = ref('')
-const uploadedChunks = ref<number[]>([])
-const totalChunks = ref(0)
-const uploadController = ref<AbortController | null>(null)
+
 
 // 监听浏览器历史记录变化
 const handlePopState = (event: PopStateEvent) => {
@@ -394,23 +385,14 @@ const customUpload = async (options: UploadRequestOptions) => {
   const file = options.file as File
   selectedFile.value = file
   
-  // 获取全局上传任务服务
-  const uploadTaskService = inject<Ref<UploadTaskService>>('uploadTaskService')
+  // 使用Pinia store添加上传任务
+  uploadTaskStore.addTask(file, currentDirectory.value.id, false)
+  ElMessage.success('已添加到上传任务列表')
+  showChunkUploadDialog.value = false
+  resetChunkUpload()
   
-  // 如果存在全局上传任务服务，则添加任务
-  if (uploadTaskService?.value?.addTask) {
-    uploadTaskService.value.addTask(file, currentDirectory.value.id, false)
-    ElMessage.success('已添加到上传任务列表')
-    showChunkUploadDialog.value = false
-    resetChunkUpload()
-    
-    // 跳转到上传任务列表页面
-    router.push('/upload-tasks')
-    return
-  }
-  
-  // 直接开始上传
-  await startChunkUpload()
+  // 跳转到上传任务列表页面
+  router.push('/upload-tasks')
 }
 
 // 处理文件下载
@@ -746,115 +728,23 @@ const cancelUpload = () => {
 const startChunkUpload = async () => {
   if (!selectedFile.value) return
   
-  // 获取全局上传任务服务
-  const uploadTaskService = inject<Ref<UploadTaskService>>('uploadTaskService')
+  // 使用Pinia store添加上传任务
+  uploadTaskStore.addTask(selectedFile.value, currentDirectory.value.id, false)
+  ElMessage.success('已添加到上传任务列表')
+  showChunkUploadDialog.value = false
+  resetChunkUpload()
   
-  // 如果存在全局上传任务服务，则添加任务
-  if (uploadTaskService?.value?.addTask) {
-    uploadTaskService.value.addTask(selectedFile.value, currentDirectory.value.id, false)
-    ElMessage.success('已添加到上传任务列表')
-    showChunkUploadDialog.value = false
-    resetChunkUpload()
-    
-    // 跳转到上传任务列表页面
-    router.push('/upload-tasks')
-    return
-  }
-  
-  // 如果没有全局上传任务服务，则在当前组件中处理上传
-  try {
-    // 关闭上传对话框
-    showChunkUploadDialog.value = false
-    
-    isUploading.value = true
-    isPaused.value = false
-    uploadController.value = new AbortController()
-    
-    // 初始化上传
-    const initResponse: any = await fileApi.initChunkUpload(
-      selectedFile.value.name,
-      selectedFile.value.size,
-      selectedFile.value.type,
-      currentDirectory.value.id,
-      false // 默认私有
-    )
-    
-    if (!initResponse || !initResponse.uploadId) {
-      throw new Error('初始化上传失败')
-    }
-    
-    currentUploadId.value = initResponse.uploadId
-    
-    // 获取已上传的分块列表
-    const chunksResponse: any = await fileApi.getUploadedChunks(currentUploadId.value)
-    uploadedChunks.value = chunksResponse?.uploadedChunks || []
-    
-    // 计算总分块数
-    totalChunks.value = Math.ceil(selectedFile.value.size / CHUNK_SIZE)
-    
-    // 开始上传分块
-    await uploadChunks()
-    
-  } catch (error) {
-    console.error('开始上传失败:', error)
-    ElMessage.error('开始上传失败')
-    isUploading.value = false
-  }
+  // 跳转到上传任务列表页面
+  router.push('/upload-tasks')
+  return
+
 }
 
-// 上传分块
-const uploadChunks = async () => {
-  if (!selectedFile.value || !currentUploadId.value) return
-  
-  try {
-    const file = selectedFile.value
-    const chunks = Math.ceil(file.size / CHUNK_SIZE)
-    
-    for (let i = 0; i < chunks; i++) {
-      // 如果上传已取消，则退出循环
-      if (!isUploading.value) {
-        return
-      }
-      
-      if (uploadedChunks.value.includes(i)) {
-        continue
-      }
-      
-      // 计算分块范围
-      const start = i * CHUNK_SIZE
-      const end = Math.min(file.size, start + CHUNK_SIZE)
-      const chunk = file.slice(start, end)
-      
-      // 上传分块
-      await fileApi.uploadChunk(currentUploadId.value, i, chunk)
-      
-      // 更新已上传分块
-      uploadedChunks.value.push(i)
-    }
-    
-    // 所有分块上传完成，合并文件
-    if (uploadedChunks.value.length === chunks) {
-      const completeResponse = await fileApi.completeChunkUpload(currentUploadId.value, chunks)
-      ElMessage.success('文件上传成功')
-      resetChunkUpload()
-      loadFiles() // 重新加载文件列表
-    }
-  } catch (error) {
-    console.error('上传分块失败:', error)
-    ElMessage.error('上传分块失败')
-    isUploading.value = false
-  }
-}
+
 
 // 重置上传状态
 const resetChunkUpload = () => {
   selectedFile.value = null
-  isUploading.value = false
-  isPaused.value = false
-  currentUploadId.value = ''
-  uploadedChunks.value = []
-  totalChunks.value = 0
-  uploadController.value = null
 }
 
 // 导航到上传任务列表页面

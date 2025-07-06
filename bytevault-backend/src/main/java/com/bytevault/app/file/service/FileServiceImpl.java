@@ -15,13 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.SequenceInputStream;
+import java.io.*;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -690,27 +687,66 @@ public class FileServiceImpl implements FileService {
             // 合并文件的最终对象名
             String finalObjectName = userId + "/" + filename;
             
-            // 使用PutObject方法手动合并文件，而不是使用ComposeObject
-            // 这样可以避开MinIO对ComposeObject的5MB最小分块大小限制
+            // 根据文件大小选择合并策略
+            final long MEMORY_THRESHOLD = 100 * 1024 * 1024; // 100MB阈值
+            
+            FileInfo fileInfo;
+            if (fileSize > MEMORY_THRESHOLD) {
+                // 大文件使用流式并行合并
+                fileInfo = completeChunkUploadStreaming(uploadId, totalChunks, userId, uploadInfo, finalObjectName);
+            } else {
+                // 小文件使用内存并行合并
+                fileInfo = completeChunkUploadParallel(uploadId, totalChunks, userId, uploadInfo, finalObjectName);
+            }
+            
+            // 清理分块和上传信息
+            cleanupChunks(uploadId, totalChunks, userId);
+            
+            log.info("文件上传完成: {}, 文件ID: {}, 用户ID: {}", uploadId, fileInfo.getId(), userId);
+            return fileInfo;
+        } catch (Exception e) {
+            log.error("完成文件上传失败: {}", e.getMessage(), e);
+            throw new RuntimeException("完成文件上传失败", e);
+        }
+    }
+    
+    /**
+     * 并行内存合并（适用于小文件）
+     */
+    private FileInfo completeChunkUploadParallel(String uploadId, int totalChunks, Long userId, 
+                                               Map<String, Object> uploadInfo, String finalObjectName) {
+        ExecutorService executor = null;
+        try {
+            // 动态计算线程池大小
+            int threadPoolSize = calculateOptimalThreads(totalChunks, 
+                Long.valueOf(uploadInfo.get("fileSize").toString()));
+            executor = Executors.newFixedThreadPool(threadPoolSize);
+            
+            log.info("开始并行合并文件: {}, 分块数: {}, 线程数: {}", uploadId, totalChunks, threadPoolSize);
+            
+            // 并行读取所有分块
+            List<CompletableFuture<ChunkData>> futures = new ArrayList<>();
+            
+            for (int i = 0; i < totalChunks; i++) {
+                final int chunkIndex = i;
+                CompletableFuture<ChunkData> future = CompletableFuture.supplyAsync(() -> {
+                    return readChunkWithRetry(userId, uploadId, chunkIndex, 3);
+                }, executor);
+                
+                futures.add(future);
+            }
+            
+            // 按顺序等待并合并分块
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             for (int i = 0; i < totalChunks; i++) {
-                String chunkObjectName = userId + "/chunks/" + uploadId + "/" + i;
-                
-                // 获取分块内容
-                GetObjectResponse response = minioClient.getObject(
-                        GetObjectArgs.builder()
-                                .bucket(userFilesBucket)
-                                .object(chunkObjectName)
-                                .build()
-                );
-                
-                // 将分块内容写入输出流
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = response.read(buffer, 0, buffer.length)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
+                try {
+                    ChunkData chunkData = futures.get(i).get(30, TimeUnit.SECONDS);
+                    outputStream.write(chunkData.getData());
+                } catch (TimeoutException e) {
+                    throw new RuntimeException("分块读取超时: " + i, e);
+                } catch (ExecutionException e) {
+                    throw new RuntimeException("分块读取失败: " + i, e.getCause());
                 }
-                response.close();
             }
             
             // 将合并后的内容上传到MinIO
@@ -720,26 +756,211 @@ public class FileServiceImpl implements FileService {
                             .bucket(userFilesBucket)
                             .object(finalObjectName)
                             .stream(inputStream, outputStream.size(), -1)
-                            .contentType(fileType)
+                            .contentType((String) uploadInfo.get("fileType"))
                             .build()
             );
             
             // 保存文件信息到数据库
-            FileInfo fileInfo = new FileInfo();
-            fileInfo.setUserId(userId);
-            fileInfo.setFilename(filename);
-            fileInfo.setParentId(parentId);
-            fileInfo.setFileSize(fileSize);
-            fileInfo.setFileType(fileType);
-            fileInfo.setIsDir(false);
-            fileInfo.setVisibility(isPublic ? "public" : "private");
-            fileInfo.setDeleted(false);
-            fileInfo.setCreateTime(LocalDateTime.now());
-            fileInfo.setUpdateTime(LocalDateTime.now());
+            return saveFileInfo(uploadInfo, userId);
             
-            fileMapper.insert(fileInfo);
+        } catch (Exception e) {
+            log.error("并行合并失败: {}", e.getMessage(), e);
+            throw new RuntimeException("并行合并失败", e);
+        } finally {
+            if (executor != null) {
+                executor.shutdown();
+                try {
+                    if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                        executor.shutdownNow();
+                    }
+                } catch (InterruptedException e) {
+                    executor.shutdownNow();
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+    }
+    
+    /**
+     * 流式并行合并（适用于大文件）
+     */
+    private FileInfo completeChunkUploadStreaming(String uploadId, int totalChunks, Long userId,
+                                                Map<String, Object> uploadInfo, String finalObjectName) {
+        ExecutorService executor = null;
+        try {
+            executor = Executors.newFixedThreadPool(4); // 流式处理使用固定4线程
             
-            // 清理分块和上传信息
+            log.info("开始流式合并文件: {}, 分块数: {}", uploadId, totalChunks);
+            
+            // 创建管道流
+            PipedOutputStream pos = new PipedOutputStream();
+            PipedInputStream pis = new PipedInputStream(pos, 1024 * 1024); // 1MB缓冲
+            
+            // 异步上传到MinIO
+            CompletableFuture<Void> uploadFuture = CompletableFuture.runAsync(() -> {
+                try {
+                    minioClient.putObject(
+                            PutObjectArgs.builder()
+                                    .bucket(userFilesBucket)
+                                    .object(finalObjectName)
+                                    .stream(pis, -1, 10485760) // 10MB part size
+                                    .contentType((String) uploadInfo.get("fileType"))
+                                    .build()
+                    );
+                } catch (Exception e) {
+                    throw new RuntimeException("流式上传失败", e);
+                }
+            }, executor);
+            
+            // 使用ConcurrentHashMap存储分块数据
+            ConcurrentHashMap<Integer, ChunkData> chunkMap = new ConcurrentHashMap<>();
+            CountDownLatch readLatch = new CountDownLatch(totalChunks);
+            
+            // 启动读取任务
+            for (int i = 0; i < totalChunks; i++) {
+                final int chunkIndex = i;
+                executor.submit(() -> {
+                    try {
+                        ChunkData chunkData = readChunkWithRetry(userId, uploadId, chunkIndex, 3);
+                        chunkMap.put(chunkIndex, chunkData);
+                        readLatch.countDown();
+                    } catch (Exception e) {
+                        log.error("读取分块失败: {}", chunkIndex, e);
+                        readLatch.countDown(); // 确保计数器减少，避免死锁
+                        throw new RuntimeException("读取分块失败: " + chunkIndex, e);
+                    }
+                });
+            }
+            
+            // 等待所有分块读取完成
+            if (!readLatch.await(300, TimeUnit.SECONDS)) {
+                throw new RuntimeException("分块读取超时");
+            }
+            
+            // 检查是否所有分块都成功读取
+            if (chunkMap.size() != totalChunks) {
+                throw new RuntimeException("部分分块读取失败，期望: " + totalChunks + ", 实际: " + chunkMap.size());
+            }
+            
+            // 按顺序写入管道
+            for (int i = 0; i < totalChunks; i++) {
+                ChunkData chunkData = chunkMap.get(i);
+                if (chunkData == null) {
+                    throw new RuntimeException("分块数据缺失: " + i);
+                }
+                pos.write(chunkData.getData());
+            }
+            
+            pos.close();
+            uploadFuture.get(300, TimeUnit.SECONDS); // 等待上传完成
+            
+            // 保存文件信息到数据库
+            return saveFileInfo(uploadInfo, userId);
+            
+        } catch (Exception e) {
+            log.error("流式合并失败: {}", e.getMessage(), e);
+            throw new RuntimeException("流式合并失败", e);
+        } finally {
+            if (executor != null) {
+                executor.shutdown();
+                try {
+                    if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                        executor.shutdownNow();
+                    }
+                } catch (InterruptedException e) {
+                    executor.shutdownNow();
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+    }
+    
+    /**
+     * 计算最优线程数
+     */
+    private int calculateOptimalThreads(int totalChunks, long fileSize) {
+        int cpuCores = Runtime.getRuntime().availableProcessors();
+        int maxThreads = Math.min(8, cpuCores * 2); // 最多8个线程
+        
+        if (fileSize < 50 * 1024 * 1024) { // 小于50MB
+            return Math.min(2, totalChunks);
+        } else if (fileSize < 200 * 1024 * 1024) { // 小于200MB
+            return Math.min(4, totalChunks);
+        } else {
+            return Math.min(maxThreads, totalChunks);
+        }
+    }
+    
+    /**
+     * 带重试的分块读取
+     */
+    private ChunkData readChunkWithRetry(Long userId, String uploadId, int chunkIndex, int maxRetries) {
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                String chunkObjectName = userId + "/chunks/" + uploadId + "/" + chunkIndex;
+                
+                // 读取分块内容
+                GetObjectResponse response = minioClient.getObject(
+                        GetObjectArgs.builder()
+                                .bucket(userFilesBucket)
+                                .object(chunkObjectName)
+                                .build()
+                );
+                
+                // 将分块内容读取到字节数组
+                ByteArrayOutputStream chunkStream = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = response.read(buffer)) != -1) {
+                    chunkStream.write(buffer, 0, bytesRead);
+                }
+                response.close();
+                
+                return new ChunkData(chunkIndex, chunkStream.toByteArray());
+            } catch (Exception e) {
+                if (attempt == maxRetries) {
+                    throw new RuntimeException("分块读取失败，已重试" + maxRetries + "次: " + chunkIndex, e);
+                }
+                log.warn("分块读取失败，第{}次重试: {}, 错误: {}", attempt, chunkIndex, e.getMessage());
+                try {
+                    Thread.sleep(1000 * attempt); // 指数退避
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("重试被中断", ie);
+                }
+            }
+        }
+        return null;
+    }
+    
+
+    
+    /**
+     * 保存文件信息到数据库
+     */
+    private FileInfo saveFileInfo(Map<String, Object> uploadInfo, Long userId) {
+        FileInfo fileInfo = new FileInfo();
+        fileInfo.setUserId(userId);
+        fileInfo.setFilename((String) uploadInfo.get("filename"));
+        fileInfo.setParentId(Long.valueOf(uploadInfo.get("parentId").toString()));
+        fileInfo.setFileSize(Long.valueOf(uploadInfo.get("fileSize").toString()));
+        fileInfo.setFileType((String) uploadInfo.get("fileType"));
+        fileInfo.setIsDir(false);
+        fileInfo.setVisibility(Boolean.parseBoolean(uploadInfo.get("isPublic").toString()) ? "public" : "private");
+        fileInfo.setDeleted(false);
+        fileInfo.setCreateTime(LocalDateTime.now());
+        fileInfo.setUpdateTime(LocalDateTime.now());
+        
+        fileMapper.insert(fileInfo);
+        return fileInfo;
+    }
+    
+    /**
+     * 清理分块文件
+     */
+    private void cleanupChunks(String uploadId, int totalChunks, Long userId) {
+        // 异步清理分块，不影响主流程
+        CompletableFuture.runAsync(() -> {
             for (int i = 0; i < totalChunks; i++) {
                 String chunkObjectName = userId + "/chunks/" + uploadId + "/" + i;
                 try {
@@ -757,12 +978,27 @@ public class FileServiceImpl implements FileService {
             // 删除Redis中的上传信息
             redisTemplate.delete(UPLOAD_INFO_PREFIX + uploadId);
             redisTemplate.delete(UPLOAD_CHUNKS_PREFIX + uploadId);
-            
-            log.info("文件上传完成: {}, 文件ID: {}, 用户ID: {}", uploadId, fileInfo.getId(), userId);
-            return fileInfo;
-        } catch (Exception e) {
-            log.error("完成文件上传失败: {}", e.getMessage(), e);
-            throw new RuntimeException("完成文件上传失败", e);
+        });
+    }
+    
+    /**
+     * 分块数据辅助类
+     */
+    private static class ChunkData {
+        private final int index;
+        private final byte[] data;
+        
+        public ChunkData(int index, byte[] data) {
+            this.index = index;
+            this.data = data;
+        }
+        
+        public int getIndex() {
+            return index;
+        }
+        
+        public byte[] getData() {
+            return data;
         }
     }
 }
