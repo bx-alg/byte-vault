@@ -114,7 +114,7 @@ export const useUploadTaskStore = defineStore('uploadTask', () => {
       if (!task.uploadedChunks.includes(chunkIndex)) {
         task.uploadedChunks.push(chunkIndex)
         task.uploadedSize += chunk.size
-        task.progress = Math.min((task.uploadedSize / task.file.size) * 100, 100)
+        task.progress = task.file.size > 0 ? Math.min((task.uploadedSize / task.file.size) * 100, 100) : 0
       }
       
       // 清除失败记录
@@ -173,14 +173,17 @@ export const useUploadTaskStore = defineStore('uploadTask', () => {
       // 计算总分块数
       task.totalChunks = Math.ceil(task.file.size / CHUNK_SIZE)
       
-      // 更新已上传大小
-      task.uploadedSize = task.uploadedChunks.length * CHUNK_SIZE
-      if (task.uploadedChunks.length > 0 && task.uploadedSize > task.file.size) {
-        task.uploadedSize = task.file.size
+      // 计算已上传大小（考虑最后一个分块可能较小）
+      let uploadedSize = 0
+      for (const chunkIndex of task.uploadedChunks) {
+        const start = chunkIndex * CHUNK_SIZE
+        const end = Math.min(task.file.size, start + CHUNK_SIZE)
+        uploadedSize += (end - start)
       }
+      task.uploadedSize = uploadedSize
       
       // 更新进度
-      task.progress = (task.uploadedSize / task.file.size) * 100
+      task.progress = task.file.size > 0 ? (task.uploadedSize / task.file.size) * 100 : 0
       
       // 准备需要上传的分块任务
       const uploadTasks: (() => Promise<any>)[] = []
@@ -212,8 +215,13 @@ export const useUploadTaskStore = defineStore('uploadTask', () => {
         await concurrentUpload(uploadTasks, MAX_CONCURRENT_UPLOADS)
       }
       
-      // 所有分块上传完成，合并文件
-      if (task.uploadedChunks.length === task.totalChunks && task.status === 'uploading') {
+      // 检查是否所有分块都已上传完成
+      console.log(`上传状态检查: 已上传分块数=${task.uploadedChunks.length}, 总分块数=${task.totalChunks}, 失败分块数=${task.failedChunks.size}`)
+      
+      // 验证所有分块都已成功上传（没有失败的分块）
+      const allChunksUploaded = task.uploadedChunks.length === task.totalChunks && task.failedChunks.size === 0
+      
+      if (allChunksUploaded && task.status === 'uploading') {
         try {
           console.log('所有分块上传完成，开始合并文件')
           await fileApi.completeChunkUpload(task.uploadId, task.totalChunks)
@@ -228,6 +236,11 @@ export const useUploadTaskStore = defineStore('uploadTask', () => {
           task.progress = 100
           ElMessage.warning(`文件 ${task.fileName} 上传完成，但服务器响应超时。请检查文件列表确认上传状态。`)
         }
+      } else if (task.failedChunks.size > 0) {
+        // 如果有失败的分块，标记任务为错误状态
+        console.error(`上传失败: 有 ${task.failedChunks.size} 个分块上传失败`)
+        task.status = 'error'
+        ElMessage.error(`文件 ${task.fileName} 上传失败：有 ${task.failedChunks.size} 个分块上传失败`)
       }
     } catch (error) {
       console.error('上传失败:', error)

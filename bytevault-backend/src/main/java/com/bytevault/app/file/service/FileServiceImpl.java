@@ -604,12 +604,12 @@ public class FileServiceImpl implements FileService {
                             .contentType("application/octet-stream")
                             .build());
             
-            // 更新已上传分块列表
-            List<Integer> uploadedChunks = getUploadedChunks(uploadId, userId);
-            if (!uploadedChunks.contains(chunkIndex)) {
-                uploadedChunks.add(chunkIndex);
-                redisTemplate.opsForValue().set(UPLOAD_CHUNKS_PREFIX + uploadId, uploadedChunks, UPLOAD_EXPIRATION, TimeUnit.SECONDS);
-            }
+            // 使用Redis原子操作更新已上传分块列表，避免并发问题
+            String chunksKey = UPLOAD_CHUNKS_PREFIX + uploadId;
+            
+            // 使用Redis的SADD操作原子性地添加分块索引
+            redisTemplate.opsForSet().add(chunksKey, chunkIndex);
+            redisTemplate.expire(chunksKey, UPLOAD_EXPIRATION, TimeUnit.SECONDS);
             
             log.info("分块上传成功: {}, 分块索引: {}, 用户ID: {}", uploadId, chunkIndex, userId);
             return true;
@@ -636,10 +636,37 @@ public class FileServiceImpl implements FileService {
                 return new ArrayList<>();
             }
             
-            // 获取已上传分块列表
-            List<Integer> uploadedChunks = (List<Integer>) redisTemplate.opsForValue().get(UPLOAD_CHUNKS_PREFIX + uploadId);
-            if (uploadedChunks == null) {
-                uploadedChunks = new ArrayList<>();
+            // 从Redis中获取已上传分块列表，兼容旧的List格式和新的Set格式
+            String chunksKey = UPLOAD_CHUNKS_PREFIX + uploadId;
+            List<Integer> uploadedChunks = new ArrayList<>();
+            
+            try {
+                // 尝试从Set中读取（新格式）
+                Set<Object> uploadedChunksSet = redisTemplate.opsForSet().members(chunksKey);
+                if (uploadedChunksSet != null && !uploadedChunksSet.isEmpty()) {
+                    for (Object chunk : uploadedChunksSet) {
+                        uploadedChunks.add((Integer) chunk);
+                    }
+                }
+            } catch (Exception e) {
+                // 如果Set操作失败，尝试从List中读取（旧格式）并迁移到Set
+                try {
+                    List<Integer> oldUploadedChunks = (List<Integer>) redisTemplate.opsForValue().get(chunksKey);
+                    if (oldUploadedChunks != null) {
+                        uploadedChunks = new ArrayList<>(oldUploadedChunks);
+                        
+                        // 迁移数据：删除旧的List，创建新的Set
+                        redisTemplate.delete(chunksKey);
+                        if (!uploadedChunks.isEmpty()) {
+                            redisTemplate.opsForSet().add(chunksKey, uploadedChunks.toArray());
+                            redisTemplate.expire(chunksKey, UPLOAD_EXPIRATION, TimeUnit.SECONDS);
+                        }
+                        
+                        log.info("已将上传分块数据从List迁移到Set: {}", uploadId);
+                    }
+                } catch (Exception migrationError) {
+                    log.warn("数据迁移失败，返回空列表: {}", migrationError.getMessage());
+                }
             }
             
             return uploadedChunks;
