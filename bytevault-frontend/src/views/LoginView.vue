@@ -170,7 +170,7 @@ const registerRules = reactive<FormRules>({
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     {
-      validator: (rule, value, callback) => {
+      validator: (_rule, value, callback) => {
         if (value !== registerForm.password) {
           callback(new Error('两次输入的密码不一致'))
         } else {
@@ -368,4 +368,4 @@ const handleRegister = async () => {
   width: 200px;
   opacity: 0.7;
 }
-</style> 
+</style>

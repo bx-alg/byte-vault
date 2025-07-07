@@ -106,11 +106,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUploadTaskStore } from '@/stores/uploadTask'
 import { Back, Document, VideoPause, VideoPlay, Close, Delete } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const uploadTaskStore = useUploadTaskStore()

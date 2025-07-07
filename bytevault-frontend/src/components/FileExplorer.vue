@@ -226,15 +226,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount, type Ref } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useUploadTaskStore } from '@/stores/uploadTask'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Search, Upload, Folder, FolderAdd, UploadFilled, List } from '@element-plus/icons-vue'
+import { Document, Search, Upload, Folder, FolderAdd, UploadFilled } from '@element-plus/icons-vue'
 import { fileApi } from '@/api'
-import type { UploadRequestOptions } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
+// import type { UploadRequestOptions } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 // 定义组件属性
 const props = defineProps({
@@ -256,7 +255,7 @@ const emit = defineEmits(['update:loading'])
 
 const userStore = useUserStore()
 const uploadTaskStore = useUploadTaskStore()
-const route = useRoute()
+// const route = useRoute()
 const router = useRouter()
 
 // 文件管理相关数据
@@ -271,13 +270,13 @@ const isSearching = ref(false)
 
 // 计算属性
 const showUpload = computed(() => props.type === 'my-files')
-const showCreateFolder = computed(() => props.type === 'my-files')
+// const showCreateFolder = computed(() => props.type === 'my-files')
 
 // 文件夹上传相关
 const folderInput = ref<HTMLInputElement | null>(null)
 
 // 断点续传相关
-const CHUNK_SIZE = 6 * 1024 * 1024 // 6MB 分块大小，确保大于MinIO的5MB最小要求
+// const CHUNK_SIZE = 6 * 1024 * 1024 // 6MB 分块大小，确保大于MinIO的5MB最小要求
 const showChunkUploadDialog = ref(false)
 const selectedFile = ref<File | null>(null)
 
@@ -380,20 +379,20 @@ const loadFiles = async () => {
 }
 
 // 自定义文件上传
-const customUpload = async (options: UploadRequestOptions) => {
-  // 获取文件
-  const file = options.file as File
-  selectedFile.value = file
-  
-  // 使用Pinia store添加上传任务
-  uploadTaskStore.addTask(file, currentDirectory.value.id, false)
-  ElMessage.success('已添加到上传任务列表')
-  showChunkUploadDialog.value = false
-  resetChunkUpload()
-  
-  // 跳转到上传任务列表页面
-  router.push('/upload-tasks')
-}
+// const customUpload = async (options: UploadRequestOptions) => {
+//   // 获取文件
+//   const file = options.file as File
+//   selectedFile.value = file
+//   
+//   // 使用Pinia store添加上传任务
+//   uploadTaskStore.addTask(file, currentDirectory.value.id, false)
+//   ElMessage.success('已添加到上传任务列表')
+//   showChunkUploadDialog.value = false
+//   resetChunkUpload()
+//   
+//   // 跳转到上传任务列表页面
+//   router.push('/upload-tasks')
+// }
 
 // 处理文件下载
 const handleDownload = async (file: any) => {
@@ -515,45 +514,45 @@ const navigateToParent = async () => {
 }
 
 // 创建文件夹
-const createNewFolder = async () => {
-  try {
-    const { value: folderName } = await ElMessageBox.prompt('请输入文件夹名称', '创建文件夹', {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      inputValidator: (value) => {
-        if (!value) {
-          return '文件夹名称不能为空'
-        }
-        if (value.length > 50) {
-          return '文件夹名称不能超过50个字符'
-        }
-        return true
-      }
-    })
+// const createNewFolder = async () => {
+//   try {
+//     const { value: folderName } = await ElMessageBox.prompt('请输入文件夹名称', '创建文件夹', {
+//       confirmButtonText: '确认',
+//       cancelButtonText: '取消',
+//       inputValidator: (value) => {
+//         if (!value) {
+//           return '文件夹名称不能为空'
+//         }
+//         if (value.length > 50) {
+//           return '文件夹名称不能超过50个字符'
+//         }
+//         return true
+//       }
+//     })
 
-    if (folderName) {
-      loading.value = true
-      emit('update:loading', true)
+//     if (folderName) {
+//       loading.value = true
+//       emit('update:loading', true)
 
-      const response = await fileApi.createFolder(folderName, currentDirectory.value.id)
+//       const response = await fileApi.createFolder(folderName, currentDirectory.value.id)
 
-      if (response && response.data) {
-        ElMessage.success('文件夹创建成功')
-        loadFiles()
-      } else {
-        ElMessage.error('文件夹创建失败')
-      }
-    }
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('创建文件夹失败:', error)
-      ElMessage.error('创建文件夹失败')
-    }
-  } finally {
-    loading.value = false
-    emit('update:loading', false)
-  }
-}
+//       if (response && response.data) {
+//         ElMessage.success('文件夹创建成功')
+//         loadFiles()
+//       } else {
+//         ElMessage.error('文件夹创建失败')
+//       }
+//     }
+//   } catch (error) {
+//     if (error !== 'cancel') {
+//       console.error('创建文件夹失败:', error)
+//       ElMessage.error('创建文件夹失败')
+//     }
+//   } finally {
+//     loading.value = false
+//     emit('update:loading', false)
+//   }
+// }
 
 // 处理文件删除
 const handleDelete = async (file: any) => {
@@ -587,15 +586,14 @@ const handleTogglePublic = async (file: any) => {
     loading.value = true
     
     const isPublic = file.visibility !== 'public'
-    let response
     
     if (file.isDir) {
       // 如果是文件夹，调用文件夹公开状态更新API
-      response = await fileApi.updateFolderPublicStatus(file.id, isPublic)
+      await fileApi.updateFolderPublicStatus(file.id, isPublic)
       ElMessage.success('文件夹及其子文件公开状态已更新')
     } else {
       // 如果是文件，调用文件公开状态更新API
-      response = await fileApi.updateFilePublicStatus(file.id, isPublic)
+      await fileApi.updateFilePublicStatus(file.id, isPublic)
       ElMessage.success('文件公开状态已更新')
     }
     
@@ -696,7 +694,7 @@ const handleFolderUpload = async (event: Event) => {
     }
 
     // 调用上传API
-    const response = await fileApi.uploadFolder(files, relativePaths, currentDirectory.value.id, false)
+    await fileApi.uploadFolder(files, relativePaths, currentDirectory.value.id, false)
 
     ElMessage.success('文件夹上传成功')
     loadFiles() // 重新加载文件列表
@@ -714,8 +712,6 @@ const handleFolderUpload = async (event: Event) => {
 // 处理文件选择
 const handleFileSelected = (file: any) => {
   selectedFile.value = file.raw
-  isUploading.value = false
-  isPaused.value = false
 }
 
 // 取消上传

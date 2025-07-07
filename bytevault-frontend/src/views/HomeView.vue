@@ -55,13 +55,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { Document, Share, List } from '@element-plus/icons-vue'
+import { Document, Share } from '@element-plus/icons-vue'
 import FileExplorer from '@/components/FileExplorer.vue'
-import { useRouter } from 'vue-router'
+// import { useRouter } from 'vue-router'
 
 // 用户信息
 const userStore = useUserStore()
-const router = useRouter()
+// const router = useRouter()
 
 // 文件浏览器相关
 const activeTab = ref('my-files')
@@ -69,9 +69,9 @@ const loading = ref(false)
 const fileExplorer = ref<InstanceType<typeof FileExplorer> | null>(null)
 
 // 导航到上传任务列表页面
-const navigateToUploadTasks = () => {
-  router.push('/upload-tasks')
-}
+// const navigateToUploadTasks = () => {
+//   router.push('/upload-tasks')
+// }
 
 // 处理标签切换
 const handleTabChange = () => {
@@ -211,4 +211,4 @@ onMounted(() => {
   width: 150px;
   opacity: 0.8;
 }
-</style> 
+</style>

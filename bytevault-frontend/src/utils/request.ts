@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
+import type { AxiosResponse, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 
 // 创建axios实例
@@ -87,4 +87,4 @@ service.interceptors.response.use(
   }
 )
 
-export default service 
+export default service

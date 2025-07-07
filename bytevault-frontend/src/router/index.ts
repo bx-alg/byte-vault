@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
-import BackgroundSettings from '@/components/BackgroundSettings.vue'
 
 // 环境变量类型声明
 declare global {
@@ -41,7 +40,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/background',
     name: 'Background',
-    component: BackgroundSettings,
+    component: () => import('@/components/BackgroundSettings.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -72,7 +71,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore()
   
   // 检查路由是否需要身份验证
@@ -112,4 +111,4 @@ router.beforeEach(async (to, from, next) => {
   }
 })
 
-export default router 
+export default router

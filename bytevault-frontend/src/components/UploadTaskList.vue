@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, VideoPause, VideoPlay, Close, Delete } from '@element-plus/icons-vue'
 import { fileApi } from '@/api'
@@ -117,42 +117,6 @@ interface UploadTask {
 
 // 任务列表
 const tasks = ref<UploadTask[]>([])
-
-// 添加调试日志，监视任务列表变化
-watch(tasks, (newTasks) => {
-  console.log('任务列表更新', newTasks)
-}, { deep: true })
-
-// 组件挂载时添加测试任务（仅用于调试）
-onMounted(() => {
-  console.log('UploadTaskList组件已挂载')
-  
-  // 如果任务列表为空，添加一个测试任务
-  if (tasks.value.length === 0) {
-    console.log('添加测试任务')
-    // 创建一个模拟文件对象
-    const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' })
-    
-    // 添加测试任务
-    const testTask: UploadTask = {
-      fileName: '测试文件.txt',
-      fileSize: 1024 * 1024, // 1MB
-      uploadedSize: 512 * 1024, // 0.5MB
-      progress: 50,
-      status: 'uploading',
-      uploadId: 'test-upload-id',
-      file: mockFile,
-      totalChunks: 10,
-      uploadedChunks: [0, 1, 2, 3, 4],
-      parentId: 0,
-      isPublic: false,
-      abortController: null
-    }
-    
-    tasks.value.push(testTask)
-    console.log('测试任务已添加', tasks.value)
-  }
-})
 
 // 计算属性：是否有已完成的任务
 const hasCompletedTasks = computed(() => {
@@ -260,12 +224,15 @@ const startUploadTask = async (taskIndex: number) => {
       ElMessage.success(`文件 ${task.fileName} 上传成功`)
     }
   } catch (error) {
-    if (task.status === 'paused') {
+    // 检查任务是否被暂停
+    if (task && (task.status as TaskStatus) === 'paused') {
       console.log('上传已暂停')
     } else {
       console.error('上传失败:', error)
-      task.status = 'error'
-      ElMessage.error(`文件 ${task.fileName} 上传失败`)
+      if (task) {
+        task.status = 'error'
+        ElMessage.error(`文件 ${task.fileName} 上传失败`)
+      }
     }
   }
 }
@@ -601,4 +568,4 @@ defineExpose({
     flex-wrap: wrap;
   }
 }
-</style> 
+</style>
