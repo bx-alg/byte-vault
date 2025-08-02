@@ -1,3 +1,4 @@
+-- Active: 1751014198967@@127.0.0.1@3306@bytevault
 -- 创建数据库
 CREATE DATABASE IF NOT EXISTS bytevault DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 

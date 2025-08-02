@@ -246,25 +246,39 @@ public class UserController {
      * @return 头像图片
      */
     @GetMapping("/avatar/{objectName}")
-    public ResponseEntity<?> getAvatar(@PathVariable String objectName) {
+    public ResponseEntity<byte[]> getAvatar(@PathVariable String objectName) {
         try {
-            // 生成预签名URL
-            String presignedUrl = minioClient.getPresignedObjectUrl(
-                    GetPresignedObjectUrlArgs.builder()
-                            .method(Method.GET)
+            // 从MinIO获取头像文件
+            InputStream inputStream = minioClient.getObject(
+                    GetObjectArgs.builder()
                             .bucket(avatarBucket)
                             .object(objectName)
-                            .expiry(1, TimeUnit.HOURS)
                             .build());
             
-            // 重定向到预签名URL
-            return ResponseEntity.status(HttpStatus.FOUND)
-                    .header("Location", presignedUrl)
-                    .build();
+            // 读取头像内容
+            byte[] imageBytes = inputStream.readAllBytes();
+            inputStream.close();
+            
+            // 根据文件扩展名设置正确的Content-Type
+            MediaType contentType = MediaType.IMAGE_JPEG; // 默认JPEG
+            if (objectName.toLowerCase().endsWith(".png")) {
+                contentType = MediaType.IMAGE_PNG;
+            } else if (objectName.toLowerCase().endsWith(".gif")) {
+                contentType = MediaType.IMAGE_GIF;
+            } else if (objectName.toLowerCase().endsWith(".webp")) {
+                contentType = MediaType.valueOf("image/webp");
+            }
+            
+            // 设置响应头
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(contentType);
+            headers.setCacheControl("max-age=31536000"); // 缓存一年
+            
+            // 返回头像内容
+            return new ResponseEntity<>(imageBytes, headers, HttpStatus.OK);
         } catch (Exception e) {
             log.error("获取头像失败: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("message", "获取头像失败: " + e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
     
@@ -408,9 +422,19 @@ public class UserController {
             byte[] imageBytes = IOUtils.toByteArray(is);
             is.close();
             
+            // 根据文件扩展名设置正确的Content-Type
+            MediaType contentType = MediaType.IMAGE_JPEG; // 默认JPEG
+            if (filename.toLowerCase().endsWith(".png")) {
+                contentType = MediaType.IMAGE_PNG;
+            } else if (filename.toLowerCase().endsWith(".gif")) {
+                contentType = MediaType.IMAGE_GIF;
+            } else if (filename.toLowerCase().endsWith(".webp")) {
+                contentType = MediaType.valueOf("image/webp");
+            }
+            
             // 设置响应头
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.IMAGE_JPEG); // 或根据实际情况设置其他媒体类型
+            headers.setContentType(contentType);
             headers.setCacheControl("max-age=31536000"); // 缓存一年
             
             // 返回图片内容

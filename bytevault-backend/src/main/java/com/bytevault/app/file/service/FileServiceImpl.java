@@ -199,7 +199,6 @@ public class FileServiceImpl implements FileService {
                 fileInfo.setUserId(userId);
                 fileInfo.setFilename(filename);
                 fileInfo.setParentId(currentParentId);
-                // 不再设置objectName字段
                 fileInfo.setFileSize(file.getSize());
                 fileInfo.setFileType(file.getContentType());
                 fileInfo.setIsDir(false);

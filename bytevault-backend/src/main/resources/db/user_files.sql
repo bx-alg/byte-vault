@@ -1,3 +1,4 @@
+-- Active: 1751014198967@@127.0.0.1@3306@bytevault
 drop table if exists `user_files`;
 
 -- 创建用户文件表
@@ -5,10 +6,9 @@ CREATE TABLE user_files (
     id           BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id      BIGINT NOT NULL,
     parent_id    BIGINT DEFAULT NULL,
-    object_name  VARCHAR(255) NOT NULL,
     file_name    VARCHAR(255) NOT NULL,
     file_size    BIGINT,
-    file_type    VARCHAR(64),
+    file_type    VARCHAR(255),
     is_dir       BOOLEAN DEFAULT FALSE,
     visibility   ENUM('private', 'public') DEFAULT 'private',
     is_deleted   BOOLEAN DEFAULT FALSE,
