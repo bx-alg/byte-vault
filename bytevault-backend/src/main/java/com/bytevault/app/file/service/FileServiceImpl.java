@@ -15,6 +15,8 @@ import io.minio.RemoveObjectsArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.Result;
 import io.minio.messages.Item;
+import io.minio.ComposeObjectArgs;
+import io.minio.ComposeSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -598,8 +600,10 @@ public class FileServiceImpl implements FileService {
                 return false;
             }
             
-            // 构建分块对象名: 用户ID/uploadId/chunkIndex
-            String chunkObjectName = userId + "/chunks/" + uploadId + "/" + chunkIndex;
+            // 获取原始文件名用于构建分块文件夹名
+            String filename = (String) uploadInfo.get("filename");
+            // 构建分块对象名: 用户ID/源文件名-chunks/chunkIndex
+            String chunkObjectName = userId + "/" + filename + "-chunks/" + chunkIndex;
             
             // 上传分块到MinIO
             InputStream inputStream = chunk.getInputStream();
@@ -718,29 +722,61 @@ public class FileServiceImpl implements FileService {
             Long parentId = Long.valueOf(uploadInfo.get("parentId").toString());
             boolean isPublic = Boolean.parseBoolean(uploadInfo.get("isPublic").toString());
             
-            // 合并文件的最终对象名
+            // 合并文件的最终对象名: 用户ID/源文件名
             String finalObjectName = userId + "/" + filename;
             
-            // 根据文件大小选择合并策略
-            final long MEMORY_THRESHOLD = 100 * 1024 * 1024; // 100MB阈值
-            
-            FileInfo fileInfo;
-            if (fileSize > MEMORY_THRESHOLD) {
-                // 大文件使用流式并行合并
-                fileInfo = completeChunkUploadStreaming(uploadId, totalChunks, userId, uploadInfo, finalObjectName);
-            } else {
-                // 小文件使用内存并行合并
-                fileInfo = completeChunkUploadParallel(uploadId, totalChunks, userId, uploadInfo, finalObjectName);
-            }
+            // 使用MinIO Compose Objects进行服务端合并
+            FileInfo fileInfo = completeChunkUploadCompose(uploadId, totalChunks, userId, uploadInfo, finalObjectName, filename);
             
             // 清理分块和上传信息
-            cleanupChunks(uploadId, totalChunks, userId);
+            cleanupChunks(uploadId, totalChunks, userId, filename);
             
             log.info("文件上传完成: {}, 文件ID: {}, 用户ID: {}", uploadId, fileInfo.getId(), userId);
             return fileInfo;
         } catch (Exception e) {
             log.error("完成文件上传失败: {}", e.getMessage(), e);
             throw new RuntimeException("完成文件上传失败", e);
+        }
+    }
+    
+    /**
+     * 使用MinIO Compose Objects进行服务端合并（最优方案）
+     */
+    private FileInfo completeChunkUploadCompose(String uploadId, int totalChunks, Long userId,
+                                              Map<String, Object> uploadInfo, String finalObjectName, String filename) {
+        try {
+            log.info("开始MinIO服务端合并文件: {}, 分块数: {}, 最终文件: {}", uploadId, totalChunks, finalObjectName);
+            
+            // 构建分块对象列表
+            List<ComposeSource> sources = new ArrayList<>();
+            for (int i = 0; i < totalChunks; i++) {
+                String chunkObjectName = userId + "/" + filename + "-chunks/" + i;
+                log.debug("添加分块到合并列表: {}", chunkObjectName);
+                sources.add(ComposeSource.builder()
+                        .bucket(userFilesBucket)
+                        .object(chunkObjectName)
+                        .build());
+            }
+            
+            log.info("准备合并 {} 个分块到最终文件: {}", sources.size(), finalObjectName);
+            
+            // 使用MinIO的composeObject进行服务端合并
+            minioClient.composeObject(
+                    ComposeObjectArgs.builder()
+                            .bucket(userFilesBucket)
+                            .object(finalObjectName)
+                            .sources(sources)
+                            .build()
+            );
+            
+            log.info("MinIO服务端合并完成: {}, 最终文件: {}", uploadId, finalObjectName);
+            
+            // 保存文件信息到数据库
+            return saveFileInfo(uploadInfo, userId);
+            
+        } catch (Exception e) {
+            log.error("MinIO服务端合并失败: {}", e.getMessage(), e);
+            throw new RuntimeException("MinIO服务端合并失败", e);
         }
     }
     
@@ -970,48 +1006,145 @@ public class FileServiceImpl implements FileService {
 
     
     /**
-     * 保存文件信息到数据库
+     * 保存文件信息到数据库（如果同位置同名文件存在则更新，否则新增）
      */
     private FileInfo saveFileInfo(Map<String, Object> uploadInfo, Long userId) {
-        FileInfo fileInfo = new FileInfo();
-        fileInfo.setUserId(userId);
-        fileInfo.setFilename((String) uploadInfo.get("filename"));
-        fileInfo.setParentId(Long.valueOf(uploadInfo.get("parentId").toString()));
-        fileInfo.setFileSize(Long.valueOf(uploadInfo.get("fileSize").toString()));
-        fileInfo.setFileType((String) uploadInfo.get("fileType"));
-        fileInfo.setIsDir(false);
-        fileInfo.setVisibility(Boolean.parseBoolean(uploadInfo.get("isPublic").toString()) ? "public" : "private");
-        fileInfo.setDeleted(false);
-        fileInfo.setCreateTime(LocalDateTime.now());
-        fileInfo.setUpdateTime(LocalDateTime.now());
+        String filename = (String) uploadInfo.get("filename");
+        Long parentId = Long.valueOf(uploadInfo.get("parentId").toString());
+        Long fileSize = Long.valueOf(uploadInfo.get("fileSize").toString());
+        String fileType = (String) uploadInfo.get("fileType");
+        String visibility = Boolean.parseBoolean(uploadInfo.get("isPublic").toString()) ? "public" : "private";
         
-        fileMapper.insert(fileInfo);
-        return fileInfo;
+        // 检查是否存在同位置同名文件
+        LambdaQueryWrapper<FileInfo> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(FileInfo::getUserId, userId)
+                   .eq(FileInfo::getFilename, filename)
+                   .eq(FileInfo::getParentId, parentId)
+                   .eq(FileInfo::getIsDir, false);
+        
+        FileInfo existingFile = fileMapper.selectOne(queryWrapper);
+        
+        if (existingFile != null) {
+            // MinIO的composeObject已经自动覆盖了同名文件，无需手动删除
+            // 只需要更新数据库记录
+            existingFile.setFileSize(fileSize);
+            existingFile.setFileType(fileType);
+            existingFile.setVisibility(visibility);
+            existingFile.setUpdateTime(LocalDateTime.now());
+            existingFile.setDeleted(false); // 确保文件未被标记为删除
+            
+            fileMapper.updateById(existingFile);
+            log.info("更新现有文件记录: 文件ID={}, 文件名={}, 用户ID={}, 新大小={}字节", 
+                    existingFile.getId(), filename, userId, fileSize);
+            return existingFile;
+        } else {
+            // 创建新文件记录
+            FileInfo fileInfo = new FileInfo();
+            fileInfo.setUserId(userId);
+            fileInfo.setFilename(filename);
+            fileInfo.setParentId(parentId);
+            fileInfo.setFileSize(fileSize);
+            fileInfo.setFileType(fileType);
+            fileInfo.setIsDir(false);
+            fileInfo.setVisibility(visibility);
+            fileInfo.setDeleted(false);
+            fileInfo.setCreateTime(LocalDateTime.now());
+            fileInfo.setUpdateTime(LocalDateTime.now());
+            
+            fileMapper.insert(fileInfo);
+            log.info("创建新文件记录: 文件ID={}, 文件名={}, 用户ID={}", fileInfo.getId(), filename, userId);
+            return fileInfo;
+        }
     }
     
     /**
-     * 清理分块文件
+     * 清理分块文件和临时文件夹
      */
-    private void cleanupChunks(String uploadId, int totalChunks, Long userId) {
+    private void cleanupChunks(String uploadId, int totalChunks, Long userId, String filename) {
         // 异步清理分块，不影响主流程
         CompletableFuture.runAsync(() -> {
+            int successCount = 0;
+            int failCount = 0;
+            
+            log.info("开始清理分块文件夹: {}, 总分块数: {}", uploadId, totalChunks);
+            
+            // 删除所有分块文件
             for (int i = 0; i < totalChunks; i++) {
-                String chunkObjectName = userId + "/chunks/" + uploadId + "/" + i;
-                try {
-                    minioClient.removeObject(
-                            RemoveObjectArgs.builder()
-                                    .bucket(userFilesBucket)
-                                    .object(chunkObjectName)
-                                    .build()
-                    );
-                } catch (Exception e) {
-                    log.warn("清理分块失败: {}", chunkObjectName, e);
+                String chunkObjectName = userId + "/" + filename + "-chunks/" + i;
+                boolean deleted = false;
+                
+                // 重试机制：最多重试3次
+                for (int retry = 0; retry < 3 && !deleted; retry++) {
+                    try {
+                        minioClient.removeObject(
+                                RemoveObjectArgs.builder()
+                                        .bucket(userFilesBucket)
+                                        .object(chunkObjectName)
+                                        .build()
+                        );
+                        deleted = true;
+                        successCount++;
+                        log.debug("成功删除分块: {}", chunkObjectName);
+                    } catch (Exception e) {
+                        log.warn("删除分块失败 (重试 {}/3): {}, 错误: {}", retry + 1, chunkObjectName, e.getMessage());
+                        if (retry < 2) {
+                            try {
+                                Thread.sleep(1000); // 重试前等待1秒
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (!deleted) {
+                    failCount++;
                 }
             }
             
+            // 尝试删除整个chunks文件夹（如果为空的话）
+            try {
+                String chunksFolderPrefix = userId + "/" + filename + "-chunks/";
+                // 列出文件夹中剩余的对象
+                Iterable<Result<Item>> results = minioClient.listObjects(
+                        ListObjectsArgs.builder()
+                                .bucket(userFilesBucket)
+                                .prefix(chunksFolderPrefix)
+                                .build()
+                );
+                
+                // 删除任何剩余的对象
+                List<DeleteObject> objectsToDelete = new ArrayList<>();
+                for (Result<Item> result : results) {
+                    Item item = result.get();
+                    objectsToDelete.add(new DeleteObject(item.objectName()));
+                }
+                
+                if (!objectsToDelete.isEmpty()) {
+                    minioClient.removeObjects(
+                            RemoveObjectsArgs.builder()
+                                    .bucket(userFilesBucket)
+                                    .objects(objectsToDelete)
+                                    .build()
+                    );
+                    log.info("清理chunks文件夹剩余文件: {} 个", objectsToDelete.size());
+                }
+                
+            } catch (Exception e) {
+                log.warn("清理chunks文件夹失败: {}", filename + "-chunks", e);
+            }
+            
+            log.info("分块清理完成: {}, 成功: {}, 失败: {}", uploadId, successCount, failCount);
+            
             // 删除Redis中的上传信息
-            redisTemplate.delete(UPLOAD_INFO_PREFIX + uploadId);
-            redisTemplate.delete(UPLOAD_CHUNKS_PREFIX + uploadId);
+            try {
+                redisTemplate.delete(UPLOAD_INFO_PREFIX + uploadId);
+                redisTemplate.delete(UPLOAD_CHUNKS_PREFIX + uploadId);
+                log.debug("清理Redis缓存完成: {}", uploadId);
+            } catch (Exception e) {
+                log.warn("清理Redis缓存失败: {}", uploadId, e);
+            }
         });
     }
     
