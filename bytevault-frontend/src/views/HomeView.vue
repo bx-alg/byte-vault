@@ -12,6 +12,18 @@
           <el-avatar :src="userStore.userInfo.avatarUrl || 'https://i.imgur.com/Jvh1OQm.jpg'" />
         </div>
       </div>
+      
+      <!-- 用户操作按钮 -->
+      <div class="user-actions" v-if="userStore.userInfo">
+        <el-button 
+          type="primary" 
+          :loading="syncLoading"
+          @click="handleSyncMyFiles"
+          :icon="Refresh"
+        >
+          同步我的文件
+        </el-button>
+      </div>
     </div>
     
     <!-- 文件浏览器切换标签 -->
@@ -55,7 +67,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { Document, Share } from '@element-plus/icons-vue'
+import { Document, Share, Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import FileExplorer from '@/components/FileExplorer.vue'
 // import { useRouter } from 'vue-router'
 
@@ -67,6 +80,9 @@ const userStore = useUserStore()
 const activeTab = ref('my-files')
 const loading = ref(false)
 const fileExplorer = ref<InstanceType<typeof FileExplorer> | null>(null)
+
+// 同步文件状态
+const syncLoading = ref(false)
 
 // 导航到上传任务列表页面
 // const navigateToUploadTasks = () => {
@@ -86,6 +102,23 @@ const handleTabChange = () => {
         fileExplorer.value.loadFiles()
       }
     }, 50)
+  }
+}
+
+// 同步我的文件
+const handleSyncMyFiles = async () => {
+  syncLoading.value = true
+  try {
+    await userStore.syncMyFiles()
+    ElMessage.success('文件同步成功！')
+    if (fileExplorer.value) {
+      fileExplorer.value.loadFiles()
+    }
+  } catch (error) {
+    ElMessage.error('文件同步失败！')
+    console.error('Sync failed:', error)
+  } finally {
+    syncLoading.value = false
   }
 }
 

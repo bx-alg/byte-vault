@@ -256,6 +256,44 @@ export function searchFiles(keyword: string, page: number = 1, pageSize: number 
 }
 
 /**
+ * 使用Elasticsearch搜索私有文件
+ * @param keyword 关键词
+ * @param page 页码
+ * @param pageSize 每页大小
+ * @returns 搜索结果
+ */
+export function searchPrivateFilesES(keyword: string, page: number = 1, pageSize: number = 10) {
+  return request({
+    url: '/api/search/private',
+    method: 'get',
+    params: {
+      keyword,
+      page: page - 1, // ES使用0基索引
+      size: pageSize
+    }
+  })
+}
+
+/**
+ * 使用Elasticsearch搜索公开文件
+ * @param keyword 关键词
+ * @param page 页码
+ * @param pageSize 每页大小
+ * @returns 搜索结果
+ */
+export function searchPublicFilesES(keyword: string, page: number = 1, pageSize: number = 10) {
+  return request({
+    url: '/api/search/public',
+    method: 'get',
+    params: {
+      keyword,
+      page: page - 1, // ES使用0基索引
+      size: pageSize
+    }
+  })
+}
+
+/**
  * 获取文件详情
  * @param fileId 文件ID
  * @returns 文件详情
@@ -330,6 +368,8 @@ export const fileApi = {
   updateFilePublicStatus,
   updateFolderPublicStatus,
   searchFiles,
+  searchPrivateFilesES,
+  searchPublicFilesES,
   getFileInfo,
   downloadFileDirectly,
   // 断点续传相关API

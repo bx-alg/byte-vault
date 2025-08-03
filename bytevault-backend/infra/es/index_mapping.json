@@ -1,0 +1,32 @@
+{
+  "mappings": {
+    "properties": {
+      "id":           { "type": "long" },
+      "user_id":      { "type": "long" },
+      "username": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_max_word",
+        "fields": {
+          "keyword": { "type": "keyword" }
+        }
+      },
+      "parent_id":    { "type": "long" },
+      "file_name": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_max_word",
+        "fields": {
+          "keyword": { "type": "keyword" }
+        }
+      },
+      "file_size":    { "type": "long" },
+      "file_type":    { "type": "keyword" },
+      "is_dir":       { "type": "boolean" },
+      "visibility":   { "type": "keyword" },
+      "is_deleted":   { "type": "boolean" },
+      "create_time":  { "type": "date", "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis" },
+      "update_time":  { "type": "date", "format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis" }
+    }
+  }
+} 

@@ -118,4 +118,25 @@ export function updateUserStatus(userId: number, status: number): Promise<User> 
  */
 export function batchUpdateUserStatus(userIds: number[], status: number): Promise<any[]> {
   return Promise.all(userIds.map(userId => updateUserStatus(userId, status)))
+}
+
+/**
+ * 同步所有文件数据到ES（管理员专用）
+ */
+export function syncAllFilesToES(): Promise<string> {
+  return request({
+    url: '/api/admin/search/sync/all',
+    method: 'post'
+  })
+}
+
+/**
+ * 管理员同步指定用户的文件数据到ES
+ * @param userId 用户ID
+ */
+export function syncUserFilesToES(userId: number): Promise<string> {
+  return request({
+    url: `/api/admin/search/sync/user/${userId}`,
+    method: 'post'
+  })
 } 

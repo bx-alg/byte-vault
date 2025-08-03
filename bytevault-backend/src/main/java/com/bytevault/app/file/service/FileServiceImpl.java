@@ -6,6 +6,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.bytevault.app.mapper.FileMapper;
 import com.bytevault.app.mapper.UserMapper;
 import com.bytevault.app.model.FileInfo;
+import com.bytevault.app.model.User;
+import com.bytevault.app.search.service.FileSearchService;
+import com.bytevault.app.search.util.FileDocumentConverter;
 import io.minio.*;
 import io.minio.http.Method;
 import io.minio.messages.DeleteError;
@@ -39,6 +42,7 @@ public class FileServiceImpl implements FileService {
     private final FileMapper fileMapper;
     private final UserMapper userMapper;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final FileSearchService fileSearchService;
 
     @Value("${minio.userFilesBucketName}")
     private String userFilesBucket;
@@ -54,11 +58,13 @@ public class FileServiceImpl implements FileService {
     // 上传过期时间（24小时）
     private static final long UPLOAD_EXPIRATION = 24 * 60 * 60;
     
-    public FileServiceImpl(MinioClient minioClient, FileMapper fileMapper, UserMapper userMapper, RedisTemplate<String, Object> redisTemplate) {
+    public FileServiceImpl(MinioClient minioClient, FileMapper fileMapper, UserMapper userMapper, 
+                          RedisTemplate<String, Object> redisTemplate, FileSearchService fileSearchService) {
         this.minioClient = minioClient;
         this.fileMapper = fileMapper;
         this.userMapper = userMapper;
         this.redisTemplate = redisTemplate;
+        this.fileSearchService = fileSearchService;
     }
 
     @Override
@@ -98,6 +104,15 @@ public class FileServiceImpl implements FileService {
             fileInfo.setUpdateTime(LocalDateTime.now());
             
             fileMapper.insert(fileInfo);
+            
+            // 同步到ES索引
+            try {
+                User user = userMapper.selectById(userId);
+                String username = user != null ? user.getUsername() : "unknown";
+                fileSearchService.indexFile(FileDocumentConverter.toFileDocument(fileInfo, username));
+            } catch (Exception e) {
+                log.error("同步文件到ES索引失败: {}", fileInfo.getFilename(), e);
+            }
             
             log.info("文件上传成功: {}, 用户ID: {}", minioObjectName, userId);
             return fileInfo;
@@ -212,6 +227,15 @@ public class FileServiceImpl implements FileService {
                 fileMapper.insert(fileInfo);
                 uploadedFiles.add(fileInfo);
                 
+                // 同步到ES索引
+                try {
+                    User user = userMapper.selectById(userId);
+                    String username = user != null ? user.getUsername() : "unknown";
+                    fileSearchService.indexFile(FileDocumentConverter.toFileDocument(fileInfo, username));
+                } catch (Exception e) {
+                    log.error("同步文件到ES索引失败: {}", fileInfo.getFilename(), e);
+                }
+                
                 log.info("文件上传成功: {}, 用户ID: {}", minioObjectName, userId);
             }
             
@@ -264,6 +288,15 @@ public class FileServiceImpl implements FileService {
             
             // 使用MyBatis-Plus的deleteById直接进行逻辑删除
             int deleteResult = fileMapper.deleteById(fileId);
+            
+            // 从ES索引中删除
+            if (deleteResult > 0) {
+                try {
+                    fileSearchService.deleteFile(fileId);
+                } catch (Exception e) {
+                    log.error("从ES索引删除文件失败: {}", fileId, e);
+                }
+            }
             
             log.info("文件删除操作: {}, 用户ID: {}, 删除结果: {}", fileId, userId, deleteResult);
             return deleteResult > 0;
@@ -443,6 +476,15 @@ public class FileServiceImpl implements FileService {
             
             fileMapper.updateById(fileInfo);
             
+            // 更新ES索引
+            try {
+                User user = userMapper.selectById(userId);
+                String username = user != null ? user.getUsername() : "unknown";
+                fileSearchService.indexFile(FileDocumentConverter.toFileDocument(fileInfo, username));
+            } catch (Exception e) {
+                log.error("更新ES索引失败: {}", fileInfo.getFilename(), e);
+            }
+            
             log.info("文件公开状态更新成功: {}, 用户ID: {}, 公开状态: {}", fileId, userId, isPublic);
             return true;
         } catch (Exception e) {
@@ -489,6 +531,15 @@ public class FileServiceImpl implements FileService {
             folder.setUpdateTime(LocalDateTime.now());
             
             fileMapper.insert(folder);
+            
+            // 同步到ES索引
+            try {
+                User user = userMapper.selectById(userId);
+                String username = user != null ? user.getUsername() : "unknown";
+                fileSearchService.indexFile(FileDocumentConverter.toFileDocument(folder, username));
+            } catch (Exception e) {
+                log.error("同步文件夹到ES索引失败: {}", folder.getFilename(), e);
+            }
             
             log.info("文件夹创建成功: {}, 用户ID: {}", folderName, userId);
             return folder;
@@ -1034,6 +1085,16 @@ public class FileServiceImpl implements FileService {
             existingFile.setDeleted(false); // 确保文件未被标记为删除
             
             fileMapper.updateById(existingFile);
+            
+            // 更新ES索引
+            try {
+                User user = userMapper.selectById(userId);
+                String username = user != null ? user.getUsername() : "unknown";
+                fileSearchService.indexFile(FileDocumentConverter.toFileDocument(existingFile, username));
+            } catch (Exception e) {
+                log.error("更新ES索引失败: {}", existingFile.getFilename(), e);
+            }
+            
             log.info("更新现有文件记录: 文件ID={}, 文件名={}, 用户ID={}, 新大小={}字节", 
                     existingFile.getId(), filename, userId, fileSize);
             return existingFile;
@@ -1052,6 +1113,16 @@ public class FileServiceImpl implements FileService {
             fileInfo.setUpdateTime(LocalDateTime.now());
             
             fileMapper.insert(fileInfo);
+            
+            // 同步到ES索引
+            try {
+                User user = userMapper.selectById(userId);
+                String username = user != null ? user.getUsername() : "unknown";
+                fileSearchService.indexFile(FileDocumentConverter.toFileDocument(fileInfo, username));
+            } catch (Exception e) {
+                log.error("同步文件到ES索引失败: {}", fileInfo.getFilename(), e);
+            }
+            
             log.info("创建新文件记录: 文件ID={}, 文件名={}, 用户ID={}", fileInfo.getId(), filename, userId);
             return fileInfo;
         }

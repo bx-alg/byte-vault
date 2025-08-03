@@ -16,6 +16,14 @@
         </el-input>
         <el-button type="primary" @click="refreshUserList">刷新</el-button>
         <el-button 
+          type="warning" 
+          :loading="syncAllLoading"
+          @click="handleSyncAllFiles"
+        >
+          同步所有文件到ES
+        </el-button>
+        <el-divider direction="vertical" />
+        <el-button 
           type="danger" 
           :disabled="selectedUsers.length === 0" 
           @click="handleBatchStatusChange(0)"
@@ -87,6 +95,15 @@
             @click="handleEdit(row)"
           >
             编辑
+          </el-button>
+          <el-button
+            type="warning"
+            size="small"
+            :loading="syncUserLoading[row.id]"
+            @click="handleSyncUserFiles(row)"
+            :icon="Refresh"
+          >
+            同步文件
           </el-button>
           <el-button
             v-if="row.status === 1"
@@ -164,8 +181,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
-import { getAllUsers, getAllRoles, updateUser, assignRolesToUser, updateUserStatus, batchUpdateUserStatus } from '@/api/admin'
+import { Search, Refresh } from '@element-plus/icons-vue'
+import { getAllUsers, getAllRoles, updateUser, assignRolesToUser, updateUserStatus, batchUpdateUserStatus, syncAllFilesToES, syncUserFilesToES } from '@/api/admin'
 import { useUserStore } from '@/stores/user'
 import type { User } from '@/api/admin'
 
@@ -182,6 +199,8 @@ if (!userStore.hasRole('admin')) {
 const users = ref<User[]>([])
 const allRoles = ref<any[]>([])
 const loading = ref(false)
+const syncAllLoading = ref(false)
+const syncUserLoading = ref<Record<number, boolean>>({})
 const searchQuery = ref('')
 const selectedUsers = ref<User[]>([])
 
@@ -387,6 +406,63 @@ const handleBatchStatusChange = async (status: number) => {
       console.error(`批量${statusText}用户失败:`, error)
       ElMessage.error(`批量${statusText}用户失败`)
     }
+  }
+}
+
+// 同步所有文件到ES
+const handleSyncAllFiles = async () => {
+  syncAllLoading.value = true
+  try {
+    await ElMessageBox.confirm(
+      '确定要同步所有文件到Elasticsearch吗？此操作可能需要较长时间。',
+      '确认操作',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await syncAllFilesToES()
+    ElMessage.success('所有文件已同步到ES')
+    refreshUserList()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('同步文件失败:', error)
+      ElMessage.error('同步文件失败')
+    }
+  } finally {
+    syncAllLoading.value = false
+  }
+}
+
+// 同步单个用户文件到ES
+const handleSyncUserFiles = async (user: User) => {
+  if (syncUserLoading.value[user.id]) {
+    ElMessage.warning('文件同步中，请稍候')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要同步用户 "${user.username}" 的文件到Elasticsearch吗？`,
+      '确认操作',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    syncUserLoading.value[user.id] = true
+    await syncUserFilesToES(user.id)
+    ElMessage.success('用户文件已同步到ES')
+    refreshUserList()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('同步用户文件失败:', error)
+      ElMessage.error('同步用户文件失败')
+    }
+  } finally {
+    syncUserLoading.value[user.id] = false
   }
 }
 

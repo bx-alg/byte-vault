@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { login, logout, getUserInfo, register } from '@/api/auth'
 import router from '@/router'
-import { uploadAvatar } from '@/api/user'
+import { uploadAvatar, syncMyFilesToES } from '@/api/user'
 import { backgroundApi } from '@/api/background'
 
 export interface UserInfo {
@@ -254,6 +254,24 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  // 同步我的文件到ES
+  const syncMyFiles = async () => {
+    if (!userInfo.value) {
+      throw new Error('用户未登录')
+    }
+    
+    try {
+      loading.value = true
+      const response = await syncMyFilesToES()
+      return response
+    } catch (error) {
+      console.error('同步文件失败:', error)
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     token,
     userInfo,
@@ -272,6 +290,7 @@ export const useUserStore = defineStore('user', () => {
     fetchBackgroundImages,
     uploadBackgroundImage,
     setCurrentBackgroundImage,
-    deleteBackgroundImage
+    deleteBackgroundImage,
+    syncMyFiles
   }
 }) 

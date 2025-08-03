@@ -86,4 +86,14 @@ export function deleteAvatar() {
     url: '/api/users/avatar',
     method: 'delete'
   });
+}
+
+/**
+ * 同步当前用户的文件数据到ES
+ */
+export function syncMyFilesToES(): Promise<string> {
+  return request({
+    url: '/api/search/sync/my-files',
+    method: 'post'
+  })
 } 

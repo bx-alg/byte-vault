@@ -9,6 +9,14 @@ spring:
      multipart:
       max-file-size: 100MB
       max-request-size: 100MB
+  # Jackson配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
   # 数据库配置
   datasource:
     url: jdbc:mysql://localhost:3306/bytevault?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf-8&allowPublicKeyRetrieval=true
@@ -70,3 +78,9 @@ minio:
   avatarBucketName: bytevault-avatar
   userFilesBucketName: user-files
   backgroundBucketName: background-images 
+
+# Elasticsearch配置
+elasticsearch:
+  uris: http://localhost:9200
+  connection-timeout: 10s
+  socket-timeout: 60s 

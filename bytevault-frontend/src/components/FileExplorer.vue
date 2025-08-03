@@ -38,6 +38,19 @@
               上传任务列表
             </el-button>
 
+            <el-button 
+              v-if="type === 'my-files'" 
+              type="success" 
+              :loading="syncLoading"
+              @click="handleSyncMyFiles" 
+              class="action-button wiggle"
+            >
+              <el-icon>
+                <Refresh />
+              </el-icon>
+              同步我的文件
+            </el-button>
+
             <el-button v-if="showUpload" type="primary" @click="showChunkUploadDialog = true" class="action-button wiggle">
               <el-icon>
                 <Upload />
@@ -230,7 +243,7 @@ import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useUploadTaskStore } from '@/stores/uploadTask'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Search, Upload, Folder, FolderAdd, UploadFilled } from '@element-plus/icons-vue'
+import { Document, Search, Upload, Folder, FolderAdd, UploadFilled, Refresh } from '@element-plus/icons-vue'
 import { fileApi } from '@/api'
 // import type { UploadRequestOptions } from 'element-plus'
 import { useRouter } from 'vue-router'
@@ -349,24 +362,60 @@ const loadFiles = async () => {
     let response: any
 
     if (isSearching.value && searchKeyword.value) {
-      // 搜索文件
-      response = await fileApi.searchFiles(searchKeyword.value, currentPage.value, pageSize.value)
+      // 使用Elasticsearch搜索文件
+      if (props.type === 'my-files') {
+        response = await fileApi.searchPrivateFilesES(searchKeyword.value, currentPage.value, pageSize.value)
+      } else {
+        response = await fileApi.searchPublicFilesES(searchKeyword.value, currentPage.value, pageSize.value)
+      }
+      
+      // 处理ES返回的Page格式数据
+      if (response && response.content) {
+        fileList.value = response.content.map((doc: any) => ({
+          id: doc.id,
+          filename: doc.fileName,  // 表格使用filename字段
+          name: doc.fileName,      // 保持兼容性
+          fileSize: doc.fileSize,  // 表格使用fileSize字段
+          size: doc.fileSize,      // 保持兼容性
+          isDir: doc.isDir,
+          visibility: doc.visibility,
+          createTime: doc.createTime,
+          updateTime: doc.updateTime,
+          userId: doc.userId,
+          username: doc.username,
+          ownerName: doc.username, // 表格显示的所有者名称
+          parentId: doc.parentId,
+          fileType: doc.fileType
+        }))
+        total.value = response.totalElements || 0
+      } else {
+        fileList.value = []
+        total.value = 0
+      }
     } else if (props.type === 'my-files') {
       // 加载用户文件
       response = await fileApi.getUserFiles(currentDirectory.value.id, currentPage.value, pageSize.value)
+      if (response) {
+        fileList.value = response.files || []
+        total.value = response.total || 0
+      } else {
+        fileList.value = []
+        total.value = 0
+        ElMessage.warning('未获取到文件数据')
+      }
     } else {
       // 加载公共文件
       response = await fileApi.getPublicFiles(currentPage.value, pageSize.value)
+      if (response) {
+        fileList.value = response.files || []
+        total.value = response.total || 0
+      } else {
+        fileList.value = []
+        total.value = 0
+        ElMessage.warning('未获取到文件数据')
+      }
     }
     console.log('加载文件响应:', response)
-    if (response) {
-      fileList.value = response.files || []
-      total.value = response.total || 0
-    } else {
-      fileList.value = []
-      total.value = 0
-      ElMessage.warning('未获取到文件数据')
-    }
   } catch (error) {
     console.error('加载文件失败:', error)
     ElMessage.error('加载文件失败，请稍后重试')
@@ -746,6 +795,33 @@ const resetChunkUpload = () => {
 // 导航到上传任务列表页面
 const navigateToUploadTasks = () => {
   router.push('/upload-tasks')
+}
+
+// 同步我的文件
+const syncLoading = ref(false)
+const handleSyncMyFiles = async () => {
+  try {
+    await ElMessageBox.confirm('确定要同步您的文件到Elasticsearch吗？', '同步确认', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+
+    syncLoading.value = true
+    emit('update:loading', true)
+
+    await userStore.syncMyFiles()
+    ElMessage.success('文件同步成功！')
+    loadFiles() // 重新加载文件列表
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('文件同步失败:', error)
+      ElMessage.error('文件同步失败，请稍后重试')
+    }
+  } finally {
+    syncLoading.value = false
+    emit('update:loading', false)
+  }
 }
 
 // 组件挂载时加载文件列表
